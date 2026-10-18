@@ -262,49 +262,6 @@ def get_recent_news(ticker_str):
         return ["Impossible de récupérer les actualités récentes pour cet actif."]
 
 # ---------------------------------------------------------
-# Extraction robuste des niveaux de prix
-# ---------------------------------------------------------
-def extract_number(text_line):
-    if not text_line:
-        return None
-    clean_line = text_line.replace(',', '.')
-    match = re.search(r'([0-9]+\.?[0-9]*)', clean_line)
-    if match:
-        try:
-            val = float(match.group(1))
-            return val if val > 0 else None
-        except ValueError:
-            return None
-    return None
-
-def extract_trade_levels(ai_text, scenario_type):
-    try:
-        text_upper = ai_text.upper()
-        if "ACHAT" in scenario_type:
-            pos = text_upper.find("ACHAT") if "ACHAT" in text_upper else 0
-            section = ai_text[pos:pos+1200]
-        else:
-            pos = text_upper.find("VENTE") if "VENTE" in text_upper else 0
-            section = ai_text[pos:pos+1200]
-
-        entry, sl, tp1, tp2 = None, None, None, None
-
-        for line in section.split('\n'):
-            line_up = line.upper()
-            if "ENTRÉE" in line_up or "ENTREE" in line_up or "POINT D'ENTRÉE" in line_up:
-                if not entry: entry = extract_number(line)
-            elif "STOP LOSS" in line_up or "SL" in line_up:
-                if not sl: sl = extract_number(line)
-            elif "TAKE PROFIT 1" in line_up or "TP1" in line_up:
-                if not tp1: tp1 = extract_number(line)
-            elif "TAKE PROFIT 2" in line_up or "TP2" in line_up:
-                if not tp2: tp2 = extract_number(line)
-
-        return entry, sl, tp1, tp2
-    except Exception:
-        return None, None, None, None
-
-# ---------------------------------------------------------
 # Graphique technique global lisible
 # ---------------------------------------------------------
 def draw_global_chart(df, pivot, r1, r2, s1, s2, asset_name, timeframe):
@@ -651,12 +608,12 @@ else:
                 entry['result'] = "N/A"
                 st.info("Cochez 'Oui' à 'Trade réalisé' pour renseigner le résultat.")
 
-        # --- Chat interactif spécifique à l'archive ---
+        # --- Chat interactif spécifique à l'archive (Isolé par ID unique de l'analyse) ---
         st.markdown("---")
         st.markdown("### 💬 Affiner l'analyse avec Gemini")
         st.markdown("Posez vos questions complémentaires sur ce trade :")
 
-        chat_key = f"chat_history_id_{entry['id']}"
+        chat_key = f"chat_history_unique_{entry['id']}_{entry['ticker']}"
         if chat_key not in st.session_state:
             st.session_state[chat_key] = []
 
@@ -664,7 +621,7 @@ else:
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
 
-        if user_query := st.chat_input("Ex: Quel serait un meilleur niveau de SL si la volatilité augmente ?", key=f"chat_input_{entry['id']}"):
+        if user_query := st.chat_input("Ex: Quel serait un meilleur niveau de SL si la volatilité augmente ?", key=f"chat_input_unique_{entry['id']}"):
             st.session_state[chat_key].append({"role": "user", "content": user_query})
             with st.chat_message("user"):
                 st.markdown(user_query)
