@@ -3,7 +3,6 @@ import yfinance as yf
 import pandas as pd
 import google.generativeai as genai
 import matplotlib.pyplot as plt
-import re
 
 # Configuration de la page Streamlit
 st.set_page_config(page_title="Bot Trading Technique & Fondamental", layout="wide")
@@ -12,23 +11,26 @@ st.title("🎯 Bot d'Analyse Technique & Fondamentale Multi-Actifs")
 st.markdown("Combinez l'analyse technique (indicateurs, pivots, graphique) et l'analyse fondamentale (actualités récentes) pour une prise de décision optimale.")
 
 # ---------------------------------------------------------
-# Configuration de la clé API & Modèle IA robuste
+# Configuration de la clé API & Diagnostic IA
 # ---------------------------------------------------------
 API_KEY = "AQ.Ab8RN6KvFijAko4RVnTWf9Uf3qE4lVbXgrMsTXay1utBmqq5-w"
 genai.configure(api_key=API_KEY)
 
 def generate_ai_report(prompt_text):
-    # Liste de modèles à tester par ordre de priorité
-    models_to_try = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro']
+    models_to_try = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-pro']
+    error_details = []
+    
     for m_name in models_to_try:
         try:
             m = genai.GenerativeModel(m_name)
             response = m.generate_content(prompt_text)
             if response and response.text:
                 return response.text
-        except Exception:
-            continue
-    return "Erreur : Aucun modèle Gemini compatible n'a pu générer l'analyse."
+        except Exception as e:
+            error_details.append(f"Modèle `{m_name}` : {e}")
+            
+    # Si tous échouent, on retourne les détails précis pour comprendre
+    return "### ⚠️ Erreur détaillée de l'API Gemini :\n\n" + "\n\n".join(error_details)
 
 # ---------------------------------------------------------
 # Dictionnaire des actifs par classe
@@ -132,7 +134,6 @@ if selected_timeframe:
         if df.empty or 'Close' not in df.columns:
             st.error("Erreur : Impossible de récupérer les données de marché.")
         else:
-            # Calculs techniques natifs
             df['MM50'] = df['Close'].rolling(window=50).mean()
             df['MM100'] = df['Close'].rolling(window=100).mean()
             df['MM200'] = df['Close'].rolling(window=200).mean()
@@ -234,7 +235,6 @@ if selected_timeframe:
             if pivot > 0:
                 ax.axhline(y=pivot, color='gray', linestyle='--', alpha=0.7, label=f'Pivot: {pivot:.2f}')
 
-            # Style du graphique sombre
             ax.set_facecolor('#0e1117')
             fig.patch.set_facecolor('#0e1117')
             ax.tick_params(colors='white')
