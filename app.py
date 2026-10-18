@@ -279,3 +279,19 @@ if selected_timeframe:
                 ai_text = generate_ai_report(prompt)
 
             # --- CONSTRUCTION DU GRAPHIQUE EN CHANDEL
+
+def get_recent_news(ticker_str):
+    try:
+        t = yf.Ticker(ticker_str)
+        # Timeout implicite / gestion rapide
+        news = t.news
+        headlines = []
+        if news and isinstance(news, list):
+            for item in news[:5]:
+                title = item.get('title') or item.get('content', {}).get('title', '')
+                publisher = item.get('publisher') or item.get('content', {}).get('provider', {}).get('displayName', '')
+                if title:
+                    headlines.append(f"- {title} (Source: {publisher})")
+        return headlines if headlines else ["Aucune actualité récente directement disponible."]
+    except Exception:
+        return ["Impossible de récupérer les actualités récentes pour cet actif."]
