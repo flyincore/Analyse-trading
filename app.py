@@ -35,7 +35,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("🎯 Bot d'Analyse Trading Technique & Fondamental")
-st.markdown("Analyse technique complète, graphique interactif Plotly (Zoom & Déplacement), pivots Fibonacci et journal de trading.")
+st.markdown("Analyse technique complète, graphique interactif Plotly (Bougies pleines, Zoom & Pan), pivots Fibonacci et journal de trading.")
 
 # ---------------------------------------------------------
 # Liste des clés API Gemini (Système de rotation / Fallback)
@@ -299,7 +299,7 @@ def get_recent_news(ticker_str):
         return ["Impossible de récupérer les actualités récentes pour cet actif."]
 
 # ---------------------------------------------------------
-# Graphique interactif Plotly (Zoom, Pan, Mobile & PC)
+# Graphique interactif Plotly avec bougies pleines
 # ---------------------------------------------------------
 def draw_interactive_chart(df, pivot, r1, r2, s1, s2, asset_name, timeframe, zoom_36h=False):
     df_plot = df.copy()
@@ -313,7 +313,7 @@ def draw_interactive_chart(df, pivot, r1, r2, s1, s2, asset_name, timeframe, zoo
 
     fig = go.Figure()
 
-    # Ajout des bougies japonaises (Candlestick)
+    # Bougies japonaises pleines (lignes de contour et remplissage de la même couleur)
     fig.add_trace(go.Candlestick(
         x=df_reset[date_col],
         open=df_reset['Open'],
@@ -321,8 +321,8 @@ def draw_interactive_chart(df, pivot, r1, r2, s1, s2, asset_name, timeframe, zoo
         low=df_reset['Low'],
         close=df_reset['Close'],
         name='Prix',
-        increasing_line_color='#00c853',
-        decreasing_line_color='#ff5252'
+        increasing=dict(line=dict(color='#00c853', width=1), fillcolor='#00c853'),
+        decreasing=dict(line=dict(color='#ff5252', width=1), fillcolor='#ff5252')
     ))
 
     # Moyenne Mobile MM50
@@ -346,7 +346,7 @@ def draw_interactive_chart(df, pivot, r1, r2, s1, s2, asset_name, timeframe, zoo
     zoom_label = " (Zoom Dernières 36h)" if zoom_36h and timeframe in ["M15", "H1", "H4"] else ""
     
     fig.update_layout(
-        title=f"📈 Graphique Interactif — {asset_name} ({timeframe}){zoom_label}",
+        title=f"📈 Graphique Interactif (Bougies Pleines) — {asset_name} ({timeframe}){zoom_label}",
         xaxis_title="Date / Heure",
         yaxis_title="Prix",
         template="plotly_dark",
@@ -597,7 +597,7 @@ else:
         zoom_setting = entry.get('zoom_36h', True)
 
         st.markdown("---")
-        # Affichage du graphique interactif Plotly
+        # Affichage du graphique interactif Plotly avec bougies pleines
         fig_interactive = draw_interactive_chart(df, pivot, r1, r2, s1, s2, entry['asset'], entry['tf'], zoom_36h=zoom_setting)
         st.plotly_chart(fig_interactive, use_container_width=True)
 
