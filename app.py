@@ -125,32 +125,51 @@ def get_recent_news(ticker_str):
         return ["Impossible de récupérer les actualités récentes pour cet actif."]
 
 # ---------------------------------------------------------
-# Fonction d'extraction des niveaux de trade & Générateur de graphique visuel
+# Extraction ultra-robuste des niveaux de prix
 # ---------------------------------------------------------
+def extract_number(text_line):
+    if not text_line:
+        return None
+    # Remplace les virgules par des points et cherche un nombre flottant
+    clean_line = text_line.replace(',', '.')
+    match = re.search(r'([0-9]+\.?[0-9]*)', clean_line)
+    if match:
+        try:
+            val = float(match.group(1))
+            return val if val > 0 else None
+        except ValueError:
+            return None
+    return None
+
 def extract_trade_levels(ai_text, scenario_type):
     try:
+        text_upper = ai_text.upper()
         if "ACHAT" in scenario_type:
-            parts = ai_text.split("SCÉNARIO D'ACHAT")
-            if len(parts) > 1:
-                section = parts[1].split("SCÉNARIO DE VENTE")[0]
+            if "SCÉNARIO D'ACHAT" in text_upper or "SCENARIO D'ACHAT" in text_upper:
+                pos = text_upper.find("ACHAT")
+                section = ai_text[pos:pos+1200]
             else:
-                return None, None, None, None
+                section = ai_text
         else:
-            parts = ai_text.split("SCÉNARIO DE VENTE")
-            if len(parts) > 1:
-                section = parts[1]
+            if "SCÉNARIO DE VENTE" in text_upper or "SCENARIO DE VENTE" in text_upper:
+                pos = text_upper.find("VENTE")
+                section = ai_text[pos:pos+1200]
             else:
-                return None, None, None, None
-        
-        entry_match = re.search(r'd\'entrée[^:]*:\s*([0-9\.]+)', section, re.IGNORECASE)
-        sl_match = re.search(r'Stop Loss[^:]*:\s*([0-9\.]+)', section, re.IGNORECASE)
-        tp1_match = re.search(r'Take Profit 1[^:]*:\s*([0-9\.]+)', section, re.IGNORECASE)
-        tp2_match = re.search(r'Take Profit 2[^:]*:\s*([0-9\.]+)', section, re.IGNORECASE)
-        
-        entry = float(entry_match.group(1)) if entry_match else None
-        sl = float(sl_match.group(1)) if sl_match else None
-        tp1 = float(tp1_match.group(1)) if tp1_match else None
-        tp2 = float(tp2_match.group(1)) if tp2_match else None
+                section = ai_text
+
+        entry, sl, tp1, tp2 = None, None, None, None
+
+        for line in section.split('\n'):
+            line_up = line.upper()
+            if "ENTRÉE" in line_up or "ENTREE" in line_up or "POINT D'ENTRÉE" in line_up:
+                if not entry: entry = extract_number(line)
+            elif "STOP LOSS" in line_up or "SL" in line_up:
+                if not sl: sl = extract_number(line)
+            elif "TAKE PROFIT 1" in line_up or "TP1" in line_up or "TAKE PROFIT 1 (TP1)" in line_up:
+                if not tp1: tp1 = extract_number(line)
+            elif "TAKE PROFIT 2" in line_up or "TP2" in line_up or "TAKE PROFIT 2 (TP2)" in line_up:
+                if not tp2: tp2 = extract_number(line)
+
         return entry, sl, tp1, tp2
     except Exception:
         return None, None, None, None
@@ -159,43 +178,45 @@ def draw_trade_setup_chart(entry, sl, tp1, tp2, is_buy=True):
     if not entry or not sl or not tp1:
         return None
     
-    fig, ax = plt.subplots(figsize=(7, 3))
+    fig, ax = plt.subplots(figsize=(7, 3.5))
     fig.patch.set_facecolor('#0e1117')
     ax.set_facecolor('#0e1117')
     
     all_vals = [entry, sl, tp1]
     if tp2: all_vals.append(tp2)
     min_p, max_p = min(all_vals), max(all_vals)
-    margin = (max_p - min_p) * 0.25 if max_p != min_p else entry * 0.01
+    margin = (max_p - min_p) * 0.30 if max_p != min_p else entry * 0.02
     
     ax.set_ylim(min_p - margin, max_p + margin)
     ax.set_xlim(0, 1)
     ax.axis('off')
     
     if is_buy:
-        # Zone de Gain (Entrée -> TP) en Vert Pâle
-        ax.axhspan(entry, tp2 if tp2 else tp1, color='#a8e6cf', alpha=0.35, label='Zone de Gain (TP)')
-        # Zone de Risque (SL -> Entrée) en Rouge Pâle
-        ax.axhspan(sl, entry, color='#ffb3ba', alpha=0.35, label='Zone de Risque (SL)')
+        # Zone de Gain (Entrée -> TP2/TP1)
+        target_tp = tp2 if tp2 else tp1
+        ax.axhspan(entry, target_tp, color='#26a69a', alpha=0.25, label='Zone de Gain (TP)')
+        # Zone de Risque (SL -> Entrée)
+        ax.axhspan(sl, entry, color='#ef5350', alpha=0.25, label='Zone de Risque (SL)')
     else:
-        # Pour Vente, profit vers le bas (TP -> Entrée) en Vert Pâle
-        ax.axhspan(tp2 if tp2 else tp1, entry, color='#a8e6cf', alpha=0.35, label='Zone de Gain (TP)')
-        # Risque vers le haut (Entrée -> SL) en Rouge Pâle
-        ax.axhspan(entry, sl, color='#ffb3ba', alpha=0.35, label='Zone de Risque (SL)')
+        # Vente : Gain vers le bas
+        target_tp = tp2 if tp2 else tp1
+        ax.axhspan(target_tp, entry, color='#26a69a', alpha=0.25, label='Zone de Gain (TP)')
+        # Risque vers le haut
+        ax.axhspan(entry, sl, color='#ef5350', alpha=0.25, label='Zone de Risque (SL)')
         
-    # Lignes des niveaux
-    ax.axhline(entry, color='white', linestyle='-', linewidth=1.8)
-    ax.text(0.5, entry, f'  Entrée: {entry}  ', color='white', fontweight='bold', ha='center', va='center', fontsize=10, bbox=dict(facecolor='#262730', edgecolor='white', alpha=0.8, boxstyle='round,pad=0.3'))
+    # Tracé des lignes horizontales
+    ax.axhline(entry, color='white', linestyle='-', linewidth=2)
+    ax.text(0.5, entry, f'  📍 Point d\'Entrée: {entry:.2f}  ', color='white', fontweight='bold', ha='center', va='center', fontsize=10, bbox=dict(facecolor='#1e222d', edgecolor='white', alpha=0.9, boxstyle='round,pad=0.4'))
     
-    ax.axhline(sl, color='#ef5350', linestyle='--', linewidth=1.3)
-    ax.text(0.5, sl, f'  Stop Loss (SL): {sl}  ', color='#ef5350', fontweight='bold', ha='center', va='center', fontsize=9, bbox=dict(facecolor='#262730', edgecolor='#ef5350', alpha=0.8, boxstyle='round,pad=0.3'))
+    ax.axhline(sl, color='#ef5350', linestyle='--', linewidth=1.5)
+    ax.text(0.5, sl, f'  🛡️ Stop Loss (SL): {sl:.2f}  ', color='#ff8a80', fontweight='bold', ha='center', va='center', fontsize=9, bbox=dict(facecolor='#1e222d', edgecolor='#ef5350', alpha=0.9, boxstyle='round,pad=0.3'))
     
-    ax.axhline(tp1, color='#26a69a', linestyle='--', linewidth=1.3)
-    ax.text(0.5, tp1, f'  Take Profit 1 (TP1): {tp1}  ', color='#26a69a', fontweight='bold', ha='center', va='center', fontsize=9, bbox=dict(facecolor='#262730', edgecolor='#26a69a', alpha=0.8, boxstyle='round,pad=0.3'))
+    ax.axhline(tp1, color='#26a69a', linestyle='--', linewidth=1.5)
+    ax.text(0.5, tp1, f'  🎯 Take Profit 1 (TP1): {tp1:.2f}  ', color='#80cbc4', fontweight='bold', ha='center', va='center', fontsize=9, bbox=dict(facecolor='#1e222d', edgecolor='#26a69a', alpha=0.9, boxstyle='round,pad=0.3'))
     
     if tp2:
-        ax.axhline(tp2, color='#26a69a', linestyle=':', linewidth=1.3)
-        ax.text(0.5, tp2, f'  Take Profit 2 (TP2): {tp2}  ', color='#26a69a', fontweight='bold', ha='center', va='center', fontsize=9, bbox=dict(facecolor='#262730', edgecolor='#26a69a', alpha=0.8, boxstyle='round,pad=0.3'))
+        ax.axhline(tp2, color='#004d40', linestyle=':', linewidth=1.5)
+        ax.text(0.5, tp2, f'  🎯 Take Profit 2 (TP2): {tp2:.2f}  ', color='#a7ffeb', fontweight='bold', ha='center', va='center', fontsize=9, bbox=dict(facecolor='#1e222d', edgecolor='#004d40', alpha=0.9, boxstyle='round,pad=0.3'))
 
     plt.tight_layout()
     return fig
@@ -364,7 +385,7 @@ if st.session_state.active_tab == "new":
                 ### ACTUALITÉS ET FLUX D'INFORMATIONS RÉCENTS :
                 {news_text}
 
-                Fournis un rapport complet structuré STRICTEMENT ainsi :
+                Fournis un rapport complet structuré STRICTEMENT ainsi (utilise EXACTEMENT des valeurs numériques pures pour les prix) :
 
                 ### 1. 📰 ANALYSE FONDAMENTALE ET ACTUALITÉS
                 - Synthèse des dernières actualités majeures affectant l'actif.
@@ -380,22 +401,22 @@ if st.session_state.active_tab == "new":
                 ---
 
                 ### 🟢 SCÉNARIO D'ACHAT (BUY / LONG) - {selected_timeframe}
-                - **Point d'entrée recommandé :** [Prix exact ex: 107.50]
-                - **Stop Loss (SL) :** [Niveau basé sur S1 ou S2 ex: 105.20]
-                - **Take Profit 1 (TP1) :** [Niveau basé sur Pivot ou R1 ex: 109.00]
-                - **Take Profit 2 (TP2) :** [Niveau basé sur R2 ex: 111.50]
-                - **Ratio Risque / Récompense (R/R) :** [ex: 1:2]
-                - **Justification :** [Confluence technique entre Pivots Fibonacci, MMs et contexte fondamental]
+                - Point d'entrée recommandé : {current_price:.2f}
+                - Stop Loss : {s1:.2f}
+                - Take Profit 1 : {r1:.2f}
+                - Take Profit 2 : {r2:.2f}
+                - Ratio Risque / Récompense (R/R) : 1:2
+                - Justification : [Explication]
 
                 ---
 
                 ### 🔴 SCÉNARIO DE VENTE (SELL / SHORT) - {selected_timeframe}
-                - **Point d'entrée recommandé :** [Prix exact ex: 108.50]
-                - **Stop Loss (SL) :** [Niveau basé sur R1 ou R2 ex: 110.10]
-                - **Take Profit 1 (TP1) :** [Niveau basé sur Pivot ou S1 ex: 106.00]
-                - **Take Profit 2 (TP2) :** [Niveau basé sur S2 ex: 104.00]
-                - **Ratio Risque / Récompense (R/R) :** [ex: 1:2.5]
-                - **Justification :** [Confluence technique entre Pivots Fibonacci, MMs et contexte fondamental]
+                - Point d'entrée recommandé : {current_price:.2f}
+                - Stop Loss : {r1:.2f}
+                - Take Profit 1 : {s1:.2f}
+                - Take Profit 2 : {s2:.2f}
+                - Ratio Risque / Récompense (R/R) : 1:2
+                - Justification : [Explication]
                 """
 
                 with st.spinner("Génération de l'analyse globale (Technique + Fondamentale)..."):
@@ -489,121 +510,4 @@ else:
         fig.patch.set_facecolor('#0e1117')
         ax.tick_params(colors='white')
         ax.xaxis.label.set_color('white')
-        ax.yaxis.label.set_color('white')
-        ax.title.set_color('white')
-        for spine in ax.spines.values():
-            spine.set_edgecolor('gray')
-
-        ax.set_title(f"Graphique en Chandelles & Pivots Fibonacci — {entry['asset']} ({entry['tf']})", fontsize=12)
-        ax.legend(loc='upper left', facecolor='#262730', edgecolor='none', labelcolor='white')
-        ax.grid(True, linestyle=':', alpha=0.3, color='gray')
-
-        st.markdown("---")
-        with st.expander("📰 Voir les flux d'actualités capturés lors de l'analyse", expanded=False):
-            for headline in entry['news']:
-                st.write(headline)
-
-        st.pyplot(fig)
-
-        st.markdown("---")
-        st.markdown("### 📊 Rapport d'Analyse Global")
-        st.markdown(entry['report'])
-
-        # --- Affichage des graphiques visuels de trade (Achat & Vente) ---
-        st.markdown("---")
-        st.markdown("### 📈 Visualisation Graphique des Scénarios de Trade")
-        
-        buy_entry, buy_sl, buy_tp1, buy_tp2 = extract_trade_levels(entry['report'], "ACHAT")
-        sell_entry, sell_sl, sell_tp1, sell_tp2 = extract_trade_levels(entry['report'], "VENTE")
-        
-        col_vis1, col_vis2 = st.columns(2)
-        with col_vis1:
-            st.markdown("#### 🟢 Visuel du Scénario d'Achat")
-            fig_buy_setup = draw_trade_setup_chart(buy_entry, buy_sl, buy_tp1, buy_tp2, is_buy=True)
-            if fig_buy_setup:
-                st.pyplot(fig_buy_setup)
-            else:
-                st.info("Niveaux d'achat non détectés pour ce visuel.")
-                
-        with col_vis2:
-            st.markdown("#### 🔴 Visuel du Scénario de Vente")
-            fig_sell_setup = draw_trade_setup_chart(sell_entry, sell_sl, sell_tp1, sell_tp2, is_buy=False)
-            if fig_sell_setup:
-                st.pyplot(fig_sell_setup)
-            else:
-                st.info("Niveaux de vente non détectés pour ce visuel.")
-
-        # --- Suivi du trade ---
-        st.markdown("---")
-        st.markdown("### 📋 Suivi de la Position")
-        col_a, col_b = st.columns(2)
-        
-        with col_a:
-            trade_executed = st.radio(
-                "Trade réalisé ?", 
-                ["Non", "Oui"], 
-                index=1 if entry['executed'] else 0, 
-                key=f"exec_{entry['id']}"
-            )
-            entry['executed'] = (trade_executed == "Oui")
-            
-        with col_b:
-            if entry['executed']:
-                result_options = ["En cours / Indéterminé", "Gagnant 🟢", "Perdant 🔴"]
-                current_res_idx = result_options.index(entry['result']) if entry['result'] in result_options else 0
-                trade_result = st.radio(
-                    "Résultat du trade :", 
-                    result_options, 
-                    index=current_res_idx,
-                    key=f"res_{entry['id']}"
-                )
-                entry['result'] = trade_result
-            else:
-                entry['result'] = "N/A"
-                st.info("Cochez 'Oui' à 'Trade réalisé' pour renseigner le résultat.")
-
-        # --- Chat interactif spécifique à l'archive ---
-        st.markdown("---")
-        st.markdown("### 💬 Affiner l'analyse avec Gemini")
-        st.markdown("Posez vos questions complémentaires sur ce trade :")
-
-        chat_key = f"chat_history_id_{entry['id']}"
-        if chat_key not in st.session_state:
-            st.session_state[chat_key] = []
-
-        for message in st.session_state[chat_key]:
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"])
-
-        if user_query := st.chat_input("Ex: Comment ajuster mon SL sur ce niveau ?", key=f"chat_input_{entry['id']}"):
-            st.session_state[chat_key].append({"role": "user", "content": user_query})
-            with st.chat_message("user"):
-                st.markdown(user_query)
-
-            with st.chat_message("assistant"):
-                with st.spinner("Gemini analyse votre question..."):
-                    conversation_history = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state[chat_key][:-1]])
-                    
-                    chat_prompt = f"""
-                    Tu es un assistant expert en trading et analyse financière.
-                    Contexte de l'actif analysé :
-                    - Actif : {entry['asset']} ({entry['ticker']})
-                    - Unité de temps : {entry['tf']}
-                    - Prix actuel lors de l'analyse : {entry['price']:.2f}
-                    - Rapport d'analyse initial :
-                    {entry['report']}
-
-                    Historique de la conversation :
-                    {conversation_history}
-
-                    Nouvelle question de l'utilisateur : {user_query}
-
-                    Réponds de manière précise et professionnelle.
-                    """
-                    
-                    reply = generate_ai_report(chat_prompt)
-                    st.markdown(reply)
-                    st.session_state[chat_key].append({"role": "assistant", "content": reply})
-    else:
-        st.session_state.active_tab = "new"
-        st.rerun()
+        ax.yaxis
