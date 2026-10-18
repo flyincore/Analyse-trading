@@ -1,7 +1,6 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-import pandas_ta as ta
 import google.generativeai as genai
 import matplotlib.pyplot as plt
 import re
@@ -18,7 +17,6 @@ st.markdown("Combinez l'analyse technique (indicateurs, pivots, graphique) et l'
 API_KEY = "AQ.Ab8RN6KvFijAko4RVnTWf9Uf3qE4lVbXgrMsTXay1utBmqq5-w"
 genai.configure(api_key=API_KEY)
 
-# Utilisation d'un modèle stable et standard
 try:
     model = genai.GenerativeModel('gemini-1.5-flash')
 except Exception:
@@ -123,18 +121,28 @@ if selected_timeframe:
         recent_news_list = get_recent_news(ticker_symbol)
         news_text = "\n".join(recent_news_list)
 
-        if df.empty:
+        if df.empty or 'Close' not in df.columns:
             st.error("Erreur : Impossible de récupérer les données de marché.")
         else:
-            df['MM50'] = ta.sma(df['Close'], length=50)
-            df['MM100'] = ta.sma(df['Close'], length=100)
-            df['MM200'] = ta.sma(df['Close'], length=200)
-            df['RSI'] = ta.rsi(df['Close'], length=14)
+            # Calculs techniques natifs (sans pandas-ta)
+            df['MM50'] = df['Close'].rolling(window=50).mean()
+            df['MM100'] = df['Close'].rolling(window=100).mean()
+            df['MM200'] = df['Close'].rolling(window=200).mean()
             
-            macd_df = ta.macd(df['Close'])
-            if macd_df is not None and not macd_df.empty:
-                df = pd.concat([df, macd_df], axis=1)
+            # Calcul RSI (14)
+            delta = df['Close'].diff()
+            gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+            loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+            rs = gain / loss
+            df['RSI'] = 100 - (100 / (1 + rs))
 
+            # Calcul MACD
+            exp1 = df['Close'].ewm(span=12, adjust=False).mean()
+            exp2 = df['Close'].ewm(span=26, adjust=False).mean()
+            df['MACD'] = exp1 - exp2
+            df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
+
+            # Pivots Fibonacci / Journaliers
             df_d = yf.download(ticker_symbol, period="5d", interval="1d", progress=False)
             if isinstance(df_d.columns, pd.MultiIndex):
                 df_d.columns = df_d.columns.get_level_values(0)
@@ -156,11 +164,8 @@ if selected_timeframe:
             mm100 = float(latest.get('MM100', 0)) if pd.notna(latest.get('MM100')) else 0.0
             mm200 = float(latest.get('MM200', 0)) if pd.notna(latest.get('MM200')) else 0.0
             rsi = float(latest.get('RSI', 0)) if pd.notna(latest.get('RSI')) else 0.0
-            
-            macd_cols = [col for col in df.columns if 'MACD_' in col]
-            signal_cols = [col for col in df.columns if 'MACDs_' in col]
-            macd_line = float(latest[macd_cols[0]]) if macd_cols and pd.notna(latest[macd_cols[0]]) else 0.0
-            macd_signal = float(latest[signal_cols[0]]) if signal_cols and pd.notna(latest[signal_cols[0]]) else 0.0
+            macd_line = float(latest.get('MACD', 0)) if pd.notna(latest.get('MACD')) else 0.0
+            macd_signal = float(latest.get('MACD_Signal', 0)) if pd.notna(latest.get('MACD_Signal')) else 0.0
 
             prompt = f"""
             Tu es un système expert en trading quantitatif et analyse macroéconomique / fondamentale.
