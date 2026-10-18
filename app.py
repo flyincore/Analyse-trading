@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 st.set_page_config(page_title="Bot Trading IA - Mondial & ISIN", layout="wide")
 
 st.title("🎯 Bot d'Analyse Trading Technique & Fondamental")
-st.markdown("Analyse technique (chandelles, indicateurs, pivots) et fondamentale (actualités en direct) avec recherche par Ticker, ISIN ou Catégories.")
+st.markdown("Analyse technique (chandelles, indicateurs, pivots Fibonacci) et fondamentale (actualités en direct) avec recherche par Ticker, ISIN ou Catégories.")
 
 # ---------------------------------------------------------
 # Liste des clés API Gemini (Système de rotation / Fallback)
@@ -25,7 +25,6 @@ def generate_ai_report(prompt_text):
     models_to_try = ['gemini-3.8-flash', 'gemini-1.5-flash', 'gemini-pro']
     error_details = []
 
-    # On boucle sur chaque clé API disponible
     for api_key in API_KEYS:
         try:
             genai.configure(api_key=api_key)
@@ -38,7 +37,6 @@ def generate_ai_report(prompt_text):
                 except Exception as e:
                     error_str = str(e)
                     error_details.append(f"Clé `{api_key[:8]}...` | Modèle `{m_name}` : {error_str}")
-                    # Si c'est un dépassement de quota (429), on passe directement à la clé API suivante
                     if "429" in error_str or "quota" in error_str.lower():
                         break
         except Exception as e:
@@ -196,20 +194,21 @@ if selected_timeframe:
             df['MACD'] = exp1 - exp2
             df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
 
+            # Calcul des Pivots Fibonacci basés sur la bougie journalière précédente
             df_d = yf.download(ticker_symbol, period="5d", interval="1d", progress=False)
             if isinstance(df_d.columns, pd.MultiIndex):
                 df_d.columns = df_d.columns.get_level_values(0)
             
             if len(df_d) >= 2:
                 prev_day = df_d.iloc[-2]
-                h, l, c = prev_day['High'], prev_day['Low'], prev_day['Close']
+                h, l, c = float(prev_day['High']), float(prev_day['Low']), float(prev_day['Close'])
                 pivot = (h + l + c) / 3
-                r1 = (2 * pivot) - l
-                r2 = pivot + (h - l)
-                s1 = (2 * pivot) - h
-                s2 = pivot - (h - l)
+                r1 = pivot + 0.382 * (h - l)
+                r2 = pivot + 0.618 * (h - l)
+                s1 = pivot - 0.382 * (h - l)
+                s2 = pivot - 0.618 * (h - l)
             else:
-                pivot, r1, r2, s1, s2 = 0, 0, 0, 0, 0
+                pivot, r1, r2, s1, s2 = 0.0, 0.0, 0.0, 0.0, 0.0
 
             latest = df.iloc[-1]
             current_price = float(latest['Close'])
@@ -229,7 +228,12 @@ if selected_timeframe:
             - MM50 = {mm50:.2f} | MM100 = {mm100:.2f} | MM200 = {mm200:.2f}
             - RSI (14) = {rsi:.2f}
             - MACD Line = {macd_line:.3f} | Signal = {macd_signal:.3f}
-            - Pivots Fibonacci : S2 = {s2:.2f}, S1 = {s1:.2f}, Pivot = {pivot:.2f}, R1 = {r1:.2f}, R2 = {r2:.2f}
+            - **POINTS DE PIVOT FIBONACCI :**
+              * Résistance 2 (R2) : {r2:.2f}
+              * Résistance 1 (R1) : {r1:.2f}
+              * Point Pivot Central (P) : {pivot:.2f}
+              * Support 1 (S1) : {s1:.2f}
+              * Support 2 (S2) : {s2:.2f}
 
             ### ACTUALITÉS ET FLUX D'INFORMATIONS RÉCENTS :
             {news_text}
@@ -243,34 +247,35 @@ if selected_timeframe:
 
             ---
 
-            ### 2. 📊 SYNTHÈSE TENDANCE TECHNIQUE ({selected_timeframe})
-            Résumé en 2-3 phrases de la configuration technique.
+            ### 2. 📊 SYNTHÈSE TENDANCE TECHNIQUE ET PIVOTS FIBONACCI ({selected_timeframe})
+            - Position actuelle du prix par rapport au Pivot Central, S1/S2 et R1/R2.
+            - Analyse croisée avec les moyennes mobiles (MM50/100/200), RSI et MACD.
 
             ---
 
             ### 🟢 SCÉNARIO D'ACHAT (BUY / LONG) - {selected_timeframe}
             - **Point d'entrée recommandé :** [Prix exact ex: 107.50]
-            - **Stop Loss (SL) :** [Prix exact ex: 105.20]
-            - **Take Profit 1 (TP1) :** [Prix exact ex: 109.00]
-            - **Take Profit 2 (TP2) :** [Prix exact ex: 111.50]
+            - **Stop Loss (SL) :** [Niveau basé sur S1 ou S2 ex: 105.20]
+            - **Take Profit 1 (TP1) :** [Niveau basé sur Pivot ou R1 ex: 109.00]
+            - **Take Profit 2 (TP2) :** [Niveau basé sur R2 ex: 111.50]
             - **Ratio Risque / Récompense (R/R) :** [ex: 1:2]
-            - **Justification :** [Raison technique + alignment fondamental]
+            - **Justification :** [Confluence technique entre Pivots Fibonacci, MMs et contexte fondamental]
 
             ---
 
             ### 🔴 SCÉNARIO DE VENTE (SELL / SHORT) - {selected_timeframe}
             - **Point d'entrée recommandé :** [Prix exact ex: 108.50]
-            - **Stop Loss (SL) :** [Prix exact ex: 110.10]
-            - **Take Profit 1 (TP1) :** [Prix exact ex: 106.00]
-            - **Take Profit 2 (TP2) :** [Prix exact ex: 104.00]
+            - **Stop Loss (SL) :** [Niveau basé sur R1 ou R2 ex: 110.10]
+            - **Take Profit 1 (TP1) :** [Niveau basé sur Pivot ou S1 ex: 106.00]
+            - **Take Profit 2 (TP2) :** [Niveau basé sur S2 ex: 104.00]
             - **Ratio Risque / Récompense (R/R) :** [ex: 1:2.5]
-            - **Justification :** [Raison technique + alignment fondamental]
+            - **Justification :** [Confluence technique entre Pivots Fibonacci, MMs et contexte fondamental]
             """
 
             with st.spinner("Génération de l'analyse globale (Technique + Fondamentale)..."):
                 ai_text = generate_ai_report(prompt)
 
-            # --- CONSTRUCTION DU GRAPHIQUE EN CHANDELLES ULTRA-RAPIDE ---
+            # --- CONSTRUCTION DU GRAPHIQUE EN CHANDELLES AVEC NIVEAUX FIBONACCI ---
             fig, ax = plt.subplots(figsize=(10, 5))
             
             df_reset = df.reset_index()
@@ -301,8 +306,13 @@ if selected_timeframe:
             if 'MM200' in df_reset.columns and df_reset['MM200'].notna().any():
                 ax.plot(x, df_reset['MM200'], label='MM 200', color='purple', linewidth=1)
 
+            # Affichage des niveaux de Pivots Fibonacci sur le graphique
             if pivot > 0:
-                ax.axhline(y=pivot, color='gray', linestyle='--', alpha=0.7, label=f'Pivot: {pivot:.2f}')
+                ax.axhline(y=pivot, color='yellow', linestyle='--', alpha=0.8, label=f'Pivot: {pivot:.2f}')
+                ax.axhline(y=r1, color='red', linestyle=':', alpha=0.6, label=f'R1 Fib: {r1:.2f}')
+                ax.axhline(y=r2, color='darkred', linestyle=':', alpha=0.6, label=f'R2 Fib: {r2:.2f}')
+                ax.axhline(y=s1, color='limegreen', linestyle=':', alpha=0.6, label=f'S1 Fib: {s1:.2f}')
+                ax.axhline(y=s2, color='green', linestyle=':', alpha=0.6, label=f'S2 Fib: {s2:.2f}')
 
             n_ticks = min(6, len(df_reset))
             step = max(1, len(df_reset) // n_ticks)
@@ -322,7 +332,7 @@ if selected_timeframe:
             for spine in ax.spines.values():
                 spine.set_edgecolor('gray')
 
-            ax.set_title(f"Graphique en Chandelles — {selected_asset_name} ({selected_timeframe})", fontsize=12)
+            ax.set_title(f"Graphique en Chandelles & Pivots Fibonacci — {selected_asset_name} ({selected_timeframe})", fontsize=12)
             ax.legend(loc='upper left', facecolor='#262730', edgecolor='none', labelcolor='white')
             ax.grid(True, linestyle=':', alpha=0.3, color='gray')
 
@@ -369,6 +379,7 @@ if selected_timeframe:
                         - Actif : {selected_asset_name} ({ticker_symbol})
                         - Unité de temps : {selected_timeframe}
                         - Prix actuel : {current_price:.2f}
+                        - Pivots Fibonacci : P={pivot:.2f}, S1={s1:.2f}, S2={s2:.2f}, R1={r1:.2f}, R2={r2:.2f}
                         - Rapport d'analyse initial fourni à l'utilisateur :
                         {ai_text}
 
