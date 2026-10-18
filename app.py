@@ -11,7 +11,7 @@ from datetime import datetime
 st.set_page_config(page_title="Bot Trading IA - Mondial & ISIN", layout="wide")
 
 st.title("🎯 Bot d'Analyse Trading Technique & Fondamental")
-st.markdown("Analyse technique complète, graphiques dédiés par scénario, journal de trading et gestion de l'historique.")
+st.markdown("Analyse technique complète, graphique global, journal de trading et gestion de l'historique.")
 
 # ---------------------------------------------------------
 # Liste des clés API Gemini (Système de rotation / Fallback)
@@ -125,50 +125,7 @@ def get_recent_news(ticker_str):
         return ["Impossible de récupérer les actualités récentes pour cet actif."]
 
 # ---------------------------------------------------------
-# Extraction robuste des niveaux de prix
-# ---------------------------------------------------------
-def extract_number(text_line):
-    if not text_line:
-        return None
-    clean_line = text_line.replace(',', '.')
-    match = re.search(r'([0-9]+\.?[0-9]*)', clean_line)
-    if match:
-        try:
-            val = float(match.group(1))
-            return val if val > 0 else None
-        except ValueError:
-            return None
-    return None
-
-def extract_trade_levels(ai_text, scenario_type):
-    try:
-        text_upper = ai_text.upper()
-        if "ACHAT" in scenario_type:
-            pos = text_upper.find("ACHAT") if "ACHAT" in text_upper else 0
-            section = ai_text[pos:pos+1200]
-        else:
-            pos = text_upper.find("VENTE") if "VENTE" in text_upper else 0
-            section = ai_text[pos:pos+1200]
-
-        entry, sl, tp1, tp2 = None, None, None, None
-
-        for line in section.split('\n'):
-            line_up = line.upper()
-            if "ENTRÉE" in line_up or "ENTREE" in line_up or "POINT D'ENTRÉE" in line_up:
-                if not entry: entry = extract_number(line)
-            elif "STOP LOSS" in line_up or "SL" in line_up:
-                if not sl: sl = extract_number(line)
-            elif "TAKE PROFIT 1" in line_up or "TP1" in line_up:
-                if not tp1: tp1 = extract_number(line)
-            elif "TAKE PROFIT 2" in line_up or "TP2" in line_up:
-                if not tp2: tp2 = extract_number(line)
-
-        return entry, sl, tp1, tp2
-    except Exception:
-        return None, None, None, None
-
-# ---------------------------------------------------------
-# 1. Graphique technique global (Vue d'ensemble)
+# Graphique technique global lisible
 # ---------------------------------------------------------
 def draw_global_chart(df, pivot, r1, r2, s1, s2, asset_name, timeframe):
     fig, ax = plt.subplots(figsize=(11, 5.5))
@@ -227,84 +184,6 @@ def draw_global_chart(df, pivot, r1, r2, s1, s2, asset_name, timeframe):
         spine.set_edgecolor('gray')
 
     ax.set_title(f"📈 Vue d'ensemble technique — {asset_name} ({timeframe})", fontsize=13, fontweight='bold')
-    ax.legend(loc='upper left', facecolor='#262730', edgecolor='none', labelcolor='white', fontsize=9)
-    ax.grid(True, linestyle=':', alpha=0.4, color='gray')
-
-    plt.tight_layout()
-    return fig
-
-# ---------------------------------------------------------
-# 2. Graphique spécifique par scénario (Achat / Vente)
-# ---------------------------------------------------------
-def draw_scenario_chart(df, pivot, r1, r2, s1, s2, entry, sl, tp1, tp2, asset_name, timeframe, is_buy=True):
-    fig, ax = plt.subplots(figsize=(11, 5.5))
-    
-    df_reset = df.reset_index()
-    x = df_reset.index.values
-    opens = df_reset['Open'].values
-    highs = df_reset['High'].values
-    lows = df_reset['Low'].values
-    closes = df_reset['Close'].values
-    
-    up = closes >= opens
-    down = closes < opens
-
-    up_color = '#26a69a'
-    down_color = '#ef5350'
-
-    ax.vlines(x[up], lows[up], highs[up], color=up_color, linewidth=1.2)
-    ax.vlines(x[down], lows[down], highs[down], color=down_color, linewidth=1.2)
-
-    body_bottom = np.minimum(opens, closes)
-    body_height = np.abs(closes - opens)
-    body_height[body_height == 0] = 0.01
-
-    ax.bar(x[up], body_height[up], bottom=body_bottom[up], color=up_color, width=0.6)
-    ax.bar(x[down], body_height[down], bottom=body_bottom[down], color=down_color, width=0.6)
-
-    if 'MM50' in df_reset.columns and df_reset['MM50'].notna().any():
-        ax.plot(x, df_reset['MM50'], label='MM 50', color='orange', linewidth=1.5)
-    if 'MM200' in df_reset.columns and df_reset['MM200'].notna().any():
-        ax.plot(x, df_reset['MM200'], label='MM 200', color='purple', linewidth=1.5)
-
-    if pivot > 0:
-        ax.axhline(y=pivot, color='yellow', linestyle='--', alpha=0.5, label=f'Pivot: {pivot:.2f}')
-
-    if entry and sl and tp1:
-        target_tp = tp2 if tp2 else tp1
-        if is_buy:
-            ax.axhspan(entry, target_tp, color='#a8e6cf', alpha=0.35, label='🟢 Zone de Gain (TP)')
-            ax.axhspan(sl, entry, color='#ffb3ba', alpha=0.35, label='🔴 Zone de Risque (SL)')
-        else:
-            ax.axhspan(target_tp, entry, color='#a8e6cf', alpha=0.35, label='🟢 Zone de Gain (TP)')
-            ax.axhspan(entry, sl, color='#ffb3ba', alpha=0.35, label='🔴 Zone de Risque (SL)')
-
-        ax.axhline(entry, color='white', linestyle='-', linewidth=2, label=f'📍 Entrée: {entry}')
-        ax.axhline(sl, color='#ef5350', linestyle='--', linewidth=1.8, label=f'🛡️ SL: {sl}')
-        ax.axhline(tp1, color='#26a69a', linestyle='--', linewidth=1.8, label=f'🎯 TP1: {tp1}')
-        if tp2:
-            ax.axhline(tp2, color='#004d40', linestyle=':', linewidth=1.8, label=f'🎯 TP2: {tp2}')
-
-    n_ticks = min(6, len(df_reset))
-    step = max(1, len(df_reset) // n_ticks)
-    tick_indices = list(range(0, len(df_reset), step))
-    date_col = 'Datetime' if 'Datetime' in df_reset.columns else 'Date'
-    tick_labels = [str(df_reset.iloc[i][date_col]).split()[0] for i in tick_indices]
-    
-    ax.set_xticks(tick_indices)
-    ax.set_xticklabels(tick_labels, rotation=30, fontsize=10)
-
-    ax.set_facecolor('#0e1117')
-    fig.patch.set_facecolor('#0e1117')
-    ax.tick_params(colors='white', labelsize=10)
-    ax.xaxis.label.set_color('white')
-    ax.yaxis.label.set_color('white')
-    ax.title.set_color('white')
-    for spine in ax.spines.values():
-        spine.set_edgecolor('gray')
-
-    scenario_label = "🟢 Scénario d'Achat (LONG)" if is_buy else "🔴 Scénario de Vente (SHORT)"
-    ax.set_title(f"{scenario_label} — {asset_name} ({timeframe})", fontsize=13, fontweight='bold')
     ax.legend(loc='upper left', facecolor='#262730', edgecolor='none', labelcolor='white', fontsize=9)
     ax.grid(True, linestyle=':', alpha=0.4, color='gray')
 
@@ -548,7 +427,7 @@ else:
         df = entry['df']
         pivot, r1, r2, s1, s2 = entry['pivot'], entry['r1'], entry['r2'], entry['s1'], entry['s2']
 
-        # 1. PREMIER GRAPHIQUE : Vue d'ensemble technique globale
+        # GRAPHIQUE UNIQUE : Vue d'ensemble technique globale
         st.markdown("---")
         fig_global = draw_global_chart(df, pivot, r1, r2, s1, s2, entry['asset'], entry['tf'])
         st.pyplot(fig_global)
@@ -561,39 +440,7 @@ else:
 
         st.markdown("---")
         st.markdown("### 📊 Rapport d'Analyse Global")
-        
-        buy_entry, buy_sl, buy_tp1, buy_tp2 = extract_trade_levels(entry['report'], "ACHAT")
-        sell_entry, sell_sl, sell_tp1, sell_tp2 = extract_trade_levels(entry['report'], "VENTE")
-
-        report_text = entry['report']
-        
-        if "### 🟢 SCÉNARIO D'ACHAT" in report_text and "### 🔴 SCÉNARIO DE VENTE" in report_text:
-            parts = report_text.split("### 🟢 SCÉNARIO D'ACHAT")
-            general_part = parts[0]
-            rest = parts[1].split("### 🔴 SCÉNARIO DE VENTE")
-            achat_part = "### 🟢 SCÉNARIO D'ACHAT" + rest[0]
-            vente_part = "### 🔴 SCÉNARIO DE VENTE" + rest[1]
-
-            # Affichage de l'analyse fondamentale et technique générale
-            st.markdown(general_part)
-
-            # 2. DEUXIÈME GRAPHIQUE : Scénario d'Achat
-            st.markdown("---")
-            st.markdown(achat_part)
-            fig_achat = draw_scenario_chart(df, pivot, r1, r2, s1, s2, buy_entry, buy_sl, buy_tp1, buy_tp2, entry['asset'], entry['tf'], is_buy=True)
-            if fig_achat:
-                st.pyplot(fig_achat)
-                plt.close(fig_achat)
-
-            # 3. TROISIÈME GRAPHIQUE : Scénario de Vente
-            st.markdown("---")
-            st.markdown(vente_part)
-            fig_vente = draw_scenario_chart(df, pivot, r1, r2, s1, s2, sell_entry, sell_sl, sell_tp1, sell_tp2, entry['asset'], entry['tf'], is_buy=False)
-            if fig_vente:
-                st.pyplot(fig_vente)
-                plt.close(fig_vente)
-        else:
-            st.markdown(report_text)
+        st.markdown(entry['report'])
 
         # --- Suivi du trade ---
         st.markdown("---")
