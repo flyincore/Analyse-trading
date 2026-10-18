@@ -12,25 +12,39 @@ st.title("🎯 Bot d'Analyse Trading Technique & Fondamental")
 st.markdown("Analyse technique (chandelles, indicateurs, pivots) et fondamentale (actualités en direct) avec recherche par Ticker, ISIN ou Catégories.")
 
 # ---------------------------------------------------------
-# Configuration de la nouvelle clé API & Modèle IA officiel
+# Liste des clés API Gemini (Système de rotation / Fallback)
 # ---------------------------------------------------------
-API_KEY = "AQ.Ab8RN6J07BTFUTUoWBM2cfsiUduTyV756t_c7L6i6SZxY7wgTg"
-genai.configure(api_key=API_KEY)
+API_KEYS = [
+    "AQ.Ab8RN6J07BTFUTUoWBM2cfsiUduTyV756t_c7L6i6SZxY7wgTg",
+    "AQ.Ab8RN6KvFijAko4RVnTWf9Uf3qE4lVbXgrMsTXay1utBmqq5-w",
+    "AQ.Ab8RN6JCQvTU9IjwjDzw6puDfrNtZllbOnggOM69BtXEKgshqg",
+    "AQ.Ab8RN6I00i8wi5lYccvl0UHNBkTHAvQ6xZTQC6WQk3dIEOx1JQ"
+]
 
 def generate_ai_report(prompt_text):
     models_to_try = ['gemini-3.8-flash', 'gemini-1.5-flash', 'gemini-pro']
     error_details = []
-    
-    for m_name in models_to_try:
+
+    # On boucle sur chaque clé API disponible
+    for api_key in API_KEYS:
         try:
-            m = genai.GenerativeModel(m_name)
-            response = m.generate_content(prompt_text)
-            if response and response.text:
-                return response.text
+            genai.configure(api_key=api_key)
+            for m_name in models_to_try:
+                try:
+                    m = genai.GenerativeModel(m_name)
+                    response = m.generate_content(prompt_text)
+                    if response and response.text:
+                        return response.text
+                except Exception as e:
+                    error_str = str(e)
+                    error_details.append(f"Clé `{api_key[:8]}...` | Modèle `{m_name}` : {error_str}")
+                    # Si c'est un dépassement de quota (429), on passe directement à la clé API suivante
+                    if "429" in error_str or "quota" in error_str.lower():
+                        break
         except Exception as e:
-            error_details.append(f"Modèle `{m_name}` : {e}")
-            
-    return "### ⚠️ Erreur détaillée de l'API Gemini :\n\n" + "\n\n".join(error_details)
+            error_details.append(f"Erreur de configuration clé `{api_key[:8]}...` : {e}")
+
+    return "### ⚠️ Erreur détaillée de l'API Gemini :\n\nToutes les clés API configurées ont dépassé leurs quotas ou ont rencontré une erreur.\n\n" + "\n\n".join(error_details)
 
 # ---------------------------------------------------------
 # Dictionnaire enrichi (US, Europe, Asie, Cryptos, Forex...)
@@ -132,7 +146,7 @@ else:
     ticker_symbol = ASSETS_DICTIONARY[selected_category][selected_asset_name]
     st.sidebar.markdown(f"**Ticker Yahoo Finance :** `{ticker_symbol}`")
 
-st.sidebar.success("🔑 Nouvelle Clé API configurée avec succès !")
+st.sidebar.success(f"🔑 {len(API_KEYS)} clé(s) API configurée(s) !")
 
 # ---------------------------------------------------------
 # Application Principale & Maintien de l'état (Session State)
