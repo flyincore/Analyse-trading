@@ -256,7 +256,7 @@ if selected_timeframe:
             with st.spinner("Génération de l'analyse globale (Technique + Fondamentale)..."):
                 ai_text = generate_ai_report(prompt)
 
-            # --- CONSTRUCTION DU GRAPHIQUE EN CHANDELLES ULTRA-RAPIDE (VECTORISÉ) ---
+            # --- CONSTRUCTION DU GRAPHIQUE EN CHANDELLES ULTRA-RAPIDE ---
             fig, ax = plt.subplots(figsize=(10, 5))
             
             df_reset = df.reset_index()
@@ -272,7 +272,6 @@ if selected_timeframe:
             up_color = '#26a69a'   # Vert
             down_color = '#ef5350' # Rouge
 
-            # Tracé vectorisé des mèches et corps de bougies (sans boucle lente)
             ax.vlines(x[up], lows[up], highs[up], color=up_color, linewidth=1)
             ax.vlines(x[down], lows[down], highs[down], color=down_color, linewidth=1)
 
@@ -325,3 +324,52 @@ if selected_timeframe:
             st.markdown("---")
             st.markdown("### 📊 Rapport d'Analyse Global")
             st.markdown(ai_text)
+
+            # ---------------------------------------------------------
+            # 💬 CHAT INTERACTIF AVEC GEMINI POUR AFFINER L'ANALYSE
+            # ---------------------------------------------------------
+            st.markdown("---")
+            st.markdown("### 💬 Affiner l'analyse avec Gemini")
+            st.markdown("Posez vos questions complémentaires sur ce trade (gestion du risque, scénarios alternatifs, psychologie de marché, etc.) :")
+
+            # Création d'une clé de session unique pour ce couple actif/timeframe
+            chat_key = f"chat_history_{ticker_symbol}_{selected_timeframe}"
+            if chat_key not in st.session_state:
+                st.session_state[chat_key] = []
+
+            # Afficher l'historique de la discussion
+            for message in st.session_state[chat_key]:
+                with st.chat_message(message["role"]):
+                    st.markdown(message["content"])
+
+            # Entrée utilisateur pour le chat
+            if user_query := st.chat_input("Ex: Quel serait un meilleur niveau de Stop Loss si la volatilité augmente ?"):
+                st.session_state[chat_key].append({"role": "user", "content": user_query})
+                with st.chat_message("user"):
+                    st.markdown(user_query)
+
+                with st.chat_message("assistant"):
+                    with st.spinner("Gemini analyse votre question..."):
+                        # Construction du prompt contextuel incluant l'analyse initiale et l'historique
+                        conversation_history = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state[chat_key][:-1]])
+                        
+                        chat_prompt = f"""
+                        Tu es un assistant expert en trading et analyse financière.
+                        Contexte de l'actif analysé :
+                        - Actif : {selected_asset_name} ({ticker_symbol})
+                        - Unité de temps : {selected_timeframe}
+                        - Prix actuel : {current_price:.2f}
+                        - Rapport d'analyse initial fourni à l'utilisateur :
+                        {ai_text}
+
+                        Historique de la conversation :
+                        {conversation_history}
+
+                        Nouvelle question de l'utilisateur : {user_query}
+
+                        Réponds de manière précise, argumentée et professionnelle en tant qu'expert quantitatif.
+                        """
+                        
+                        reply = generate_ai_report(chat_prompt)
+                        st.markdown(reply)
+                        st.session_state[chat_key].append({"role": "assistant", "content": reply})
