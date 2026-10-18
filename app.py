@@ -17,7 +17,12 @@ st.markdown("Combinez l'analyse technique (indicateurs, pivots, graphique) et l'
 # ---------------------------------------------------------
 API_KEY = "AQ.Ab8RN6KvFijAko4RVnTWf9Uf3qE4lVbXgrMsTXay1utBmqq5-w"
 genai.configure(api_key=API_KEY)
-model = genai.GenerativeModel('gemini-3.8-flash')
+
+# Utilisation d'un modèle stable et standard
+try:
+    model = genai.GenerativeModel('gemini-1.5-flash')
+except Exception:
+    model = None
 
 # ---------------------------------------------------------
 # Dictionnaire des actifs par classe
@@ -204,9 +209,14 @@ if selected_timeframe:
             - **Justification :** [Raison technique + alignment fondamental]
             """
 
-            with st.spinner("Génération de l'analyse globale (Technique + Fondamentale)..."):
-                response = model.generate_content(prompt)
-                ai_text = response.text
+            ai_text = "Erreur d'initialisation de l'IA."
+            if model:
+                try:
+                    with st.spinner("Génération de l'analyse globale (Technique + Fondamentale)..."):
+                        response = model.generate_content(prompt)
+                        ai_text = response.text
+                except Exception as e:
+                    ai_text = f"Erreur lors de la génération par l'IA : {e}"
 
             # --- CONSTRUCTION DU GRAPHIQUE STABLE MATPLOTLIB ---
             fig, ax = plt.subplots(figsize=(10, 5))
