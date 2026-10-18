@@ -109,9 +109,9 @@ ASSETS_DICTIONARY = {
 }
 
 TIMEFRAME_MAPPING = {
-    "M15": {"interval": "15m", "period": "14d"},
-    "M30": {"interval": "30m", "period": "30d"},
-    "H1":  {"interval": "1h",  "period": "60d"},
+    "M15": {"interval": "15m", "period": "7d"},
+    "M30": {"interval": "30m", "period": "14d"},
+    "H1":  {"interval": "1h",  "period": "30d"},
     "H4":  {"interval": "1h",  "period": "60d"},
     "D1":  {"interval": "1d",  "period": "1y"}
 }
@@ -121,7 +121,7 @@ def get_recent_news(ticker_str):
         t = yf.Ticker(ticker_str)
         news = t.news
         headlines = []
-        if news:
+        if news and isinstance(news, list):
             for item in news[:5]:
                 title = item.get('title') or item.get('content', {}).get('title', '')
                 publisher = item.get('publisher') or item.get('content', {}).get('provider', {}).get('displayName', '')
@@ -136,7 +136,6 @@ def get_recent_news(ticker_str):
 # ---------------------------------------------------------
 st.sidebar.header("1. Sélection de l'Actif")
 
-# Recherche libre universelle
 custom_ticker_input = st.sidebar.text_input("🔍 Ticker libre (ex: BABA, 7203.T, TTE.PA...)", "").strip()
 
 if custom_ticker_input:
@@ -163,17 +162,21 @@ with st.sidebar.expander("ℹ️ Suffixes boursiers mondiaux"):
 st.sidebar.success("🔑 Clé API pré-configurée avec succès !")
 
 # ---------------------------------------------------------
-# Application Principale
+# Application Principale & Maintien de l'état (Session State)
 # ---------------------------------------------------------
 st.subheader("2. Choisissez l'unité de temps pour l'analyse")
 
+if "selected_timeframe" not in st.session_state:
+    st.session_state.selected_timeframe = None
+
 col1, col2, col3, col4, col5 = st.columns(5)
-selected_timeframe = None
-if col1.button("⚡ M15", use_container_width=True): selected_timeframe = "M15"
-if col2.button("⏱️ M30", use_container_width=True): selected_timeframe = "M30"
-if col3.button("📊 H1", use_container_width=True): selected_timeframe = "H1"
-if col4.button("📈 H4", use_container_width=True): selected_timeframe = "H4"
-if col5.button("📅 D1", use_container_width=True): selected_timeframe = "D1"
+if col1.button("⚡ M15", use_container_width=True): st.session_state.selected_timeframe = "M15"
+if col2.button("⏱️ M30", use_container_width=True): st.session_state.selected_timeframe = "M30"
+if col3.button("📊 H1", use_container_width=True): st.session_state.selected_timeframe = "H1"
+if col4.button("📈 H4", use_container_width=True): st.session_state.selected_timeframe = "H4"
+if col5.button("📅 D1", use_container_width=True): st.session_state.selected_timeframe = "D1"
+
+selected_timeframe = st.session_state.selected_timeframe
 
 if selected_timeframe:
     tf_info = TIMEFRAME_MAPPING[selected_timeframe]
@@ -278,20 +281,66 @@ if selected_timeframe:
             with st.spinner("Génération de l'analyse globale (Technique + Fondamentale)..."):
                 ai_text = generate_ai_report(prompt)
 
-            # --- CONSTRUCTION DU GRAPHIQUE EN CHANDEL
+            # --- CONSTRUCTION DU GRAPHIQUE EN CHANDELLES ---
+            fig, ax = plt.subplots(figsize=(10, 5))
+            
+            df_reset = df.reset_index()
+            x = range(len(df_reset))
+            
+            up_color = '#26a69a'   # Vert
+            down_color = '#ef5350' # Rouge
 
-def get_recent_news(ticker_str):
-    try:
-        t = yf.Ticker(ticker_str)
-        # Timeout implicite / gestion rapide
-        news = t.news
-        headlines = []
-        if news and isinstance(news, list):
-            for item in news[:5]:
-                title = item.get('title') or item.get('content', {}).get('title', '')
-                publisher = item.get('publisher') or item.get('content', {}).get('provider', {}).get('displayName', '')
-                if title:
-                    headlines.append(f"- {title} (Source: {publisher})")
-        return headlines if headlines else ["Aucune actualité récente directement disponible."]
-    except Exception:
-        return ["Impossible de récupérer les actualités récentes pour cet actif."]
+            for i in x:
+                row = df_reset.iloc[i]
+                o, h, l, c = row['Open'], row['High'], row['Low'], row['Close']
+                color = up_color if c >= o else down_color
+                
+                ax.vlines(i, l, h, color=color, linewidth=1)
+                body_bottom = min(o, c)
+                body_height = abs(c - o)
+                if body_height == 0:
+                    body_height = 0.01
+                ax.bar(i, body_height, bottom=body_bottom, color=color, width=0.6)
+
+            if 'MM50' in df_reset.columns and df_reset['MM50'].notna().any():
+                ax.plot(x, df_reset['MM50'], label='MM 50', color='orange', linewidth=1)
+            if 'MM200' in df_reset.columns and df_reset['MM200'].notna().any():
+                ax.plot(x, df_reset['MM200'], label='MM 200', color='purple', linewidth=1)
+
+            if pivot > 0:
+                ax.axhline(y=pivot, color='gray', linestyle='--', alpha=0.7, label=f'Pivot: {pivot:.2f}')
+
+            n_ticks = min(6, len(df_reset))
+            step = max(1, len(df_reset) // n_ticks)
+            tick_indices = list(range(0, len(df_reset), step))
+            date_col = 'Datetime' if 'Datetime' in df_reset.columns else 'Date'
+            tick_labels = [str(df_reset.iloc[i][date_col]).split()[0] for i in tick_indices]
+            
+            ax.set_xticks(tick_indices)
+            ax.set_xticklabels(tick_labels, rotation=30, fontsize=9)
+
+            ax.set_facecolor('#0e1117')
+            fig.patch.set_facecolor('#0e1117')
+            ax.tick_params(colors='white')
+            ax.xaxis.label.set_color('white')
+            ax.yaxis.label.set_color('white')
+            ax.title.set_color('white')
+            for spine in ax.spines.values():
+                spine.set_edgecolor('gray')
+
+            ax.set_title(f"Graphique en Chandelles — {selected_asset_name} ({selected_timeframe})", fontsize=12)
+            ax.legend(loc='upper left', facecolor='#262730', edgecolor='none', labelcolor='white')
+            ax.grid(True, linestyle=':', alpha=0.3, color='gray')
+
+            # --- AFFICHAGE STREAMLIT ---
+            st.markdown("---")
+            
+            with st.expander("📰 Voir les flux d'actualités récents capturés", expanded=False):
+                for headline in recent_news_list:
+                    st.write(headline)
+
+            st.pyplot(fig)
+
+            st.markdown("---")
+            st.markdown("### 📊 Rapport d'Analyse Global")
+            st.markdown(ai_text)
