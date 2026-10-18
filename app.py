@@ -41,7 +41,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("🎯 Bot d'Analyse Trading Pro — Suite Institutionnelle")
-st.markdown("Analyse multi-timeframe, score de confluence, gestion des risques ATR, filtres macro et journal de trading.")
+st.markdown("Analyse multi-timeframe, score de confluence, gestion des risques ATR, catalogue mondial complet et journal de trading.")
 
 # ---------------------------------------------------------
 # Liste des clés API Gemini (Système de rotation / Fallback)
@@ -77,27 +77,192 @@ def generate_ai_report(prompt_text):
     return "### ⚠️ Erreur détaillée de l'API Gemini :\n\nToutes les clés API configurées ont dépassé leurs quotas ou ont rencontré une erreur.\n\n" + "\n\n".join(error_details)
 
 # ---------------------------------------------------------
-# Dictionnaire des actifs
+# Dictionnaire complet et exhaustif (100+ actifs)
 # ---------------------------------------------------------
 ASSETS_DICTIONARY = {
     "🇺🇸 Actions USA (Wall Street)": {
-        "Apple": "AAPL", "Nvidia": "NVDA", "Microsoft": "MSFT", "Amazon": "AMZN",
-        "Alphabet (Google)": "GOOGL", "Meta (Facebook)": "META", "Tesla": "TSLA", "AMD": "AMD"
+        "Apple": "AAPL",
+        "Nvidia": "NVDA",
+        "Microsoft": "MSFT",
+        "Amazon": "AMZN",
+        "Alphabet (Google)": "GOOGL",
+        "Meta (Facebook)": "META",
+        "Tesla": "TSLA",
+        "AMD": "AMD",
+        "Netflix": "NFLX",
+        "Intel": "INTC",
+        "JPMorgan Chase": "JPM",
+        "Visa": "V",
+        "Mastercard": "MA",
+        "Bank of America": "BAC",
+        "Coca-Cola": "KO",
+        "PepsiCo": "PEP",
+        "Walt Disney": "DIS",
+        "Nike": "NKE",
+        "Pfizer": "PFE",
+        "Johnson & Johnson": "JNJ",
+        "ExxonMobil": "XOM",
+        "Chevron": "CVX",
+        "Walmart": "WMT",
+        "Palantir": "PLTR",
+        "Super Micro Computer": "SMCI"
     },
-    "🇪🇺 Actions Europe": {
-        "TotalEnergies (France)": "TTE.PA", "LVMH (France)": "MC.PA", "ASML (Pays-Bas)": "ASML.AS", "SAP (Allemagne)": "SAP.DE"
+    "🇪🇺 Actions Europe (Euronext, DAX, LSE)": {
+        "TotalEnergies (France)": "TTE.PA",
+        "LVMH (France)": "MC.PA",
+        "ASML (Pays-Bas)": "ASML.AS",
+        "SAP (Allemagne)": "SAP.DE",
+        "Siemens (Allemagne)": "SIE.DE",
+        "Sanofi (France)": "SAN.PA",
+        "Airbus (France/DE)": "AIR.PA",
+        "L'Oréal (France)": "OR.PA",
+        "Schneider Electric (France)": "SU.PA",
+        "Air Liquide (France)": "AI.PA",
+        "BNP Paribas (France)": "BNP.PA",
+        "AXA (France)": "CS.PA",
+        "Hermès (France)": "RMS.PA",
+        "Kering (France)": "KER.PA",
+        "Stellantis (France/IT)": "STLAM.MI",
+        "Volkswagen (Allemagne)": "VOW3.DE",
+        "Allianz (Allemagne)": "ALV.DE",
+        "Mercedes-Benz (Allemagne)": "MBG.DE",
+        "BASF (Allemagne)": "BAS.DE",
+        "Bayer (Allemagne)": "BAYN.DE",
+        "Unilever (Royaume-Uni)": "ULVR.L",
+        "Shell (Royaume-Uni)": "SHEL.L",
+        "BP (Royaume-Uni)": "BP.L",
+        "HSBC (Royaume-Uni)": "HSBA.L",
+        "Banco Santander (Espagne)": "SAN.MC"
+    },
+    "🌏 Actions Asie & Pacifique": {
+        "TSMC (Taïwan - ADR US)": "TSM",
+        "Toyota (Japon)": "7203.T",
+        "Sony (Japon)": "6758.T",
+        "Tencent (Hong Kong)": "0700.HK",
+        "Alibaba (Hong Kong)": "9988.HK",
+        "Samsung Electronics (Corée du Sud)": "005930.KS",
+        "SoftBank Group (Japon)": "9984.T",
+        "Nintendo (Japon)": "7974.T",
+        "Mitsubishi UFJ (Japon)": "8306.T",
+        "Keyence (Japon)": "6861.T",
+        "Tokyo Electron (Japon)": "8035.T",
+        "Fast Retailing / Uniqlo (Japon)": "9983.T",
+        "Honda (Japon)": "7267.T",
+        "KDDI (Japon)": "9433.T",
+        "Meituan (Hong Kong)": "3690.HK",
+        "JD.com (Hong Kong)": "9618.HK",
+        "Baidu (Hong Kong)": "9888.HK",
+        "Xiaomi (Hong Kong)": "1810.HK",
+        "BYD Company (Hong Kong)": "1211.HK",
+        "SK Hynix (Corée du Sud)": "000660.KS"
     },
     "📊 Indices Boursiers": {
-        "S&P 500 (USA)": "^GSPC", "Nasdaq 100 (USA)": "^IXIC", "CAC 40 (France)": "^FCHI", "DAX 40 (Allemagne)": "^GDAXI"
+        "S&P 500 (USA)": "^GSPC",
+        "Nasdaq 100 (USA)": "^IXIC",
+        "Dow Jones Industrial Average (USA)": "^DJI",
+        "Russell 2000 (USA)": "^RUT",
+        "CAC 40 (France)": "^FCHI",
+        "DAX 40 (Allemagne)": "^GDAXI",
+        "Euro Stoxx 50 (Europe)": "^STOXX50E",
+        "FTSE 100 (Royaume-Uni)": "^FTSE",
+        "IBEX 35 (Espagne)": "^IBEX",
+        "FTSE MIB (Italie)": "FTSEMIB.MI",
+        "AEX (Pays-Bas)": "^AEX",
+        "SMI (Suisse)": "^SSMI",
+        "Nikkei 225 (Japon)": "^N225",
+        "TOPIX (Japon)": "^TOPX",
+        "Hang Seng (Hong Kong)": "^HSI",
+        "Shanghai Composite (Chine)": "000030.SS",
+        "CSI 300 (Chine)": "000300.SS",
+        "Nifty 50 (Inde)": "^NSEI",
+        "BSE Sensex (Inde)": "^BSESN",
+        "ASX 200 (Australie)": "^AXJO",
+        "IBOVESPA (Brésil)": "^BVSP",
+        "IPC Mexico (Mexique)": "^MXX",
+        "FTSE JSE Top 40 (Afrique du Sud)": "^J200.JO",
+        "JSX Composite (Indonésie)": "^JKSE",
+        "STI (Singapour)": "^STI"
     },
     "🛢️ Matières Premières": {
-        "Pétrole Brent": "BZ=F", "Or (Gold)": "GC=F", "Argent (Silver)": "SI=F", "Cuivre (Copper)": "HG=F"
+        "Pétrole Brent": "BZ=F",
+        "Pétrole WTI (Light Crude)": "CL=F",
+        "Or (Gold)": "GC=F",
+        "Argent (Silver)": "SI=F",
+        "Cuivre (Copper)": "HG=F",
+        "Platinium": "PL=F",
+        "Palladium": "PA=F",
+        "Gaz Naturel (Natural Gas)": "NG=F",
+        "Blé (Wheat)": "ZW=F",
+        "Maïs (Corn)": "ZC=F",
+        "Soja (Soybean)": "ZS=F",
+        "Café (Coffee)": "KC=F",
+        "Sucre (Sugar)": "SB=F",
+        "Cacao (Cocoa)": "CC=F",
+        "Coton (Cotton)": "CT=F",
+        "Aluminium": "ALI=F",
+        "Zinc": "ZNC=F",
+        "Nickel": "NIC=F",
+        "Bétail Vivant (Live Cattle)": "LE=F",
+        "Porc Maigre (Lean Hogs)": "HE=F",
+        "Avoine (Oats)": "ZO=F",
+        "Riz (Rough Rice)": "ZR=F",
+        "Essence RBOB (Gasoline)": "RB=F",
+        "Fioul Domestique (Heating Oil)": "HO=F",
+        "Fer (Iron Ore)": "TIO=F"
     },
     "💱 Forex (Devises)": {
-        "EUR/USD": "EURUSD=X", "GBP/USD": "GBPUSD=X", "USD/JPY": "USDJPY=X", "AUD/USD": "AUDUSD=X"
+        "EUR/USD": "EURUSD=X",
+        "GBP/USD": "GBPUSD=X",
+        "USD/JPY": "USDJPY=X",
+        "USD/CHF": "USDCHF=X",
+        "AUD/USD": "AUDUSD=X",
+        "USD/CAD": "USDCAD=X",
+        "NZD/USD": "NZDUSD=X",
+        "EUR/GBP": "EURGBP=X",
+        "EUR/JPY": "EURJPY=X",
+        "GBP/JPY": "GBPJPY=X",
+        "EUR/CHF": "EURCHF=X",
+        "AUD/JPY": "AUDJPY=X",
+        "EUR/AUD": "EURAUD=X",
+        "EUR/CAD": "EURCAD=X",
+        "GBP/CHF": "GBPCHF=X",
+        "CHF/JPY": "CHFJPY=X",
+        "NZD/JPY": "NZDJPY=X",
+        "AUD/CAD": "AUDCAD=X",
+        "AUD/NZD": "AUDNZD=X",
+        "CAD/JPY": "CADJPY=X",
+        "USD/ZAR": "USDZAR=X",
+        "USD/MXN": "USDMXN=X",
+        "USD/TRY": "USDTRY=X",
+        "USD/BRL": "USDBRL=X",
+        "USD/SEK": "USDSEK=X"
     },
     "🪙 Cryptomonnaies": {
-        "Bitcoin (BTC/USD)": "BTC-USD", "Ethereum (ETH/USD)": "ETH-USD", "Solana (SOL-USD)": "SOL-USD"
+        "Bitcoin (BTC/USD)": "BTC-USD",
+        "Ethereum (ETH/USD)": "ETH-USD",
+        "Solana (SOL-USD)": "SOL-USD",
+        "Binance Coin (BNB/USD)": "BNB-USD",
+        "Ripple (XRP/USD)": "XRP-USD",
+        "Cardano (ADA/USD)": "ADA-USD",
+        "Dogecoin (DOGE/USD)": "DOGE-USD",
+        "Avalanche (AVAX/USD)": "AVAX-USD",
+        "Chainlink (LINK/USD)": "LINK-USD",
+        "Polkadot (DOT/USD)": "DOT-USD",
+        "Polygon (POL/USD)": "POL-USD",
+        "Tron (TRX/USD)": "TRX-USD",
+        "Shiba Inu (SHIB/USD)": "SHIB-USD",
+        "Litecoin (LTC/USD)": "LTC-USD",
+        "Uniswap (UNI/USD)": "UNI-USD",
+        "Cosmos (ATOM/USD)": "ATOM-USD",
+        "Monero (XMR/USD)": "XMR-USD",
+        "Stellar (XLM/USD)": "XLM-USD",
+        "Near Protocol (NEAR/USD)": "NEAR-USD",
+        "Render (RENDER/USD)": "RENDER-USD",
+        "Sui (SUI/USD)": "SUI-USD",
+        "Aptos (APT/USD)": "APT-USD",
+        "Arbitrum (ARB/USD)": "ARB-USD",
+        "Pepe (PEPE/USD)": "PEPE-USD",
+        "Toncoin (TON/USD)": "TON-USD"
     }
 }
 
@@ -221,19 +386,23 @@ if "current_analysis" not in st.session_state:
 # Barre latérale : Sélection globale & Paramètres de Risque
 # ---------------------------------------------------------
 st.sidebar.header("1. Sélection de l'Actif")
+
 custom_ticker_input = st.sidebar.text_input("🔍 Ticker libre (ex: AAPL, BTC-USD)", "").strip()
-custom_isin_input = st.sidebar.text_input("🔍 Ou code ISIN", "").strip()
+custom_isin_input = st.sidebar.text_input("🔍 Ou code ISIN (ex: FR0000120271)", "").strip()
 
 if custom_ticker_input:
     ticker_symbol = custom_ticker_input.upper()
     selected_asset_name = custom_ticker_input.upper()
+    st.sidebar.info(f"Ticker actif : `{ticker_symbol}`")
 elif custom_isin_input:
     ticker_symbol = custom_isin_input.upper()
     selected_asset_name = f"ISIN: {ticker_symbol}"
+    st.sidebar.info(f"Code ISIN actif : `{ticker_symbol}`")
 else:
-    selected_category = st.sidebar.selectbox("Catégorie", list(ASSETS_DICTIONARY.keys()))
-    selected_asset_name = st.sidebar.selectbox("Actif", list(ASSETS_DICTIONARY[selected_category].keys()))
+    selected_category = st.sidebar.selectbox("Sélectionnez la Catégorie", list(ASSETS_DICTIONARY.keys()))
+    selected_asset_name = st.sidebar.selectbox("Sélectionnez l'Actif", list(ASSETS_DICTIONARY[selected_category].keys()))
     ticker_symbol = ASSETS_DICTIONARY[selected_category][selected_asset_name]
+    st.sidebar.markdown(f"**Ticker Yahoo Finance :** `{ticker_symbol}`")
 
 st.sidebar.markdown("---")
 st.sidebar.header("⚙️ Paramètres de Risque")
@@ -299,7 +468,7 @@ if st.session_state.active_tab == "new":
             news_text = "\n".join(recent_news_list)
 
             if df.empty or 'Close' not in df.columns:
-                st.error(f"Erreur : Impossible de récupérer les données pour `{ticker_symbol}`.")
+                st.error(f"Erreur : Impossible de récupérer les données pour `{ticker_symbol}`. Vérifiez que le code ISIN ou le ticker est valide.")
             else:
                 df['MM50'] = df['Close'].rolling(window=50 if len(df) >= 50 else 10).mean()
                 df['MM200'] = df['Close'].rolling(window=200 if len(df) >= 200 else 20).mean()
