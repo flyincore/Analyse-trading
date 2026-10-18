@@ -84,12 +84,15 @@ ASSETS_DICTIONARY = {
     }
 }
 
+# Mapping mis à jour avec les unités Mois et Années
 TIMEFRAME_MAPPING = {
-    "M15": {"interval": "15m", "period": "7d"},
-    "M30": {"interval": "30m", "period": "14d"},
-    "H1":  {"interval": "1h",  "period": "30d"},
-    "H4":  {"interval": "1h",  "period": "60d"},
-    "D1":  {"interval": "1d",  "period": "1y"}
+    "M15":    {"interval": "15m", "period": "7d"},
+    "M30":    {"interval": "30m", "period": "14d"},
+    "H1":     {"interval": "1h",  "period": "30d"},
+    "H4":     {"interval": "1h",  "period": "60d"},
+    "D1":     {"interval": "1d",  "period": "1y"},
+    "Mois":   {"interval": "1mo", "period": "5y"},
+    "Années": {"interval": "1mo", "period": "max"}
 }
 
 def get_recent_news(ticker_str):
@@ -139,12 +142,15 @@ st.subheader("2. Choisissez l'unité de temps pour l'analyse")
 if "selected_timeframe" not in st.session_state:
     st.session_state.selected_timeframe = None
 
-col1, col2, col3, col4, col5 = st.columns(5)
-if col1.button("⚡ M15", use_container_width=True): st.session_state.selected_timeframe = "M15"
-if col2.button("⏱️ M30", use_container_width=True): st.session_state.selected_timeframe = "M30"
-if col3.button("📊 H1", use_container_width=True): st.session_state.selected_timeframe = "H1"
-if col4.button("📈 H4", use_container_width=True): st.session_state.selected_timeframe = "H4"
-if col5.button("📅 D1", use_container_width=True): st.session_state.selected_timeframe = "D1"
+# 7 colonnes pour intégrer M15, M30, H1, H4, D1, Mois, Années
+col1, col2, col3, col4, col5, col6, col7 = st.columns(7)
+if col1.button("⚡ M15", use_container_width=True):    st.session_state.selected_timeframe = "M15"
+if col2.button("⏱️ M30", use_container_width=True):    st.session_state.selected_timeframe = "M30"
+if col3.button("📊 H1", use_container_width=True):     st.session_state.selected_timeframe = "H1"
+if col4.button("📈 H4", use_container_width=True):     st.session_state.selected_timeframe = "H4"
+if col5.button("📅 D1", use_container_width=True):     st.session_state.selected_timeframe = "D1"
+if col6.button("🗓️ Mois", use_container_width=True):   st.session_state.selected_timeframe = "Mois"
+if col7.button("📈 Années", use_container_width=True): st.session_state.selected_timeframe = "Années"
 
 selected_timeframe = st.session_state.selected_timeframe
 
@@ -302,4 +308,15 @@ if selected_timeframe:
             ax.legend(loc='upper left', facecolor='#262730', edgecolor='none', labelcolor='white')
             ax.grid(True, linestyle=':', alpha=0.3, color='gray')
 
-            # --- AFFICHAGE STREAMLIT
+            # --- AFFICHAGE STREAMLIT ---
+            st.markdown("---")
+            
+            with st.expander("📰 Voir les flux d'actualités récents capturés", expanded=False):
+                for headline in recent_news_list:
+                    st.write(headline)
+
+            st.pyplot(fig)
+
+            st.markdown("---")
+            st.markdown("### 📊 Rapport d'Analyse Global")
+            st.markdown(ai_text)
