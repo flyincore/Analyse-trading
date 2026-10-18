@@ -12,9 +12,9 @@ st.title("🎯 Bot d'Analyse Trading Technique & Fondamental")
 st.markdown("Analyse technique (chandelles, indicateurs, pivots) et fondamentale (actualités en direct) avec recherche par Ticker, ISIN ou Catégories.")
 
 # ---------------------------------------------------------
-# Configuration de la clé API & Modèle IA officiel
+# Configuration de la nouvelle clé API & Modèle IA officiel
 # ---------------------------------------------------------
-API_KEY = "AQ.Ab8RN6KvFijAko4RVnTWf9Uf3qE4lVbXgrMsTXay1utBmqq5-w"
+API_KEY = "AQ.Ab8RN6J07BTFUTUoWBM2cfsiUduTyV756t_c7L6i6SZxY7wgTg"
 genai.configure(api_key=API_KEY)
 
 def generate_ai_report(prompt_text):
@@ -132,7 +132,7 @@ else:
     ticker_symbol = ASSETS_DICTIONARY[selected_category][selected_asset_name]
     st.sidebar.markdown(f"**Ticker Yahoo Finance :** `{ticker_symbol}`")
 
-st.sidebar.success("🔑 Clé API pré-configurée avec succès !")
+st.sidebar.success("🔑 Nouvelle Clé API configurée avec succès !")
 
 # ---------------------------------------------------------
 # Application Principale & Maintien de l'état (Session State)
@@ -332,17 +332,14 @@ if selected_timeframe:
             st.markdown("### 💬 Affiner l'analyse avec Gemini")
             st.markdown("Posez vos questions complémentaires sur ce trade (gestion du risque, scénarios alternatifs, psychologie de marché, etc.) :")
 
-            # Création d'une clé de session unique pour ce couple actif/timeframe
             chat_key = f"chat_history_{ticker_symbol}_{selected_timeframe}"
             if chat_key not in st.session_state:
                 st.session_state[chat_key] = []
 
-            # Afficher l'historique de la discussion
             for message in st.session_state[chat_key]:
                 with st.chat_message(message["role"]):
                     st.markdown(message["content"])
 
-            # Entrée utilisateur pour le chat
             if user_query := st.chat_input("Ex: Quel serait un meilleur niveau de Stop Loss si la volatilité augmente ?"):
                 st.session_state[chat_key].append({"role": "user", "content": user_query})
                 with st.chat_message("user"):
@@ -350,7 +347,6 @@ if selected_timeframe:
 
                 with st.chat_message("assistant"):
                     with st.spinner("Gemini analyse votre question..."):
-                        # Construction du prompt contextuel incluant l'analyse initiale et l'historique
                         conversation_history = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state[chat_key][:-1]])
                         
                         chat_prompt = f"""
