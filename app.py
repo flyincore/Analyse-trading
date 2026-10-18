@@ -5,10 +5,10 @@ import google.generativeai as genai
 import matplotlib.pyplot as plt
 
 # Configuration de la page Streamlit
-st.set_page_config(page_title="Bot Trading Technique & Fondamental", layout="wide")
+st.set_page_config(page_title="Bot Trading IA - Mondial", layout="wide")
 
-st.title("🎯 Bot d'Analyse Technique & Fondamentale Multi-Actifs")
-st.markdown("Combinez l'analyse technique (chandelles, indicateurs, pivots) et l'analyse fondamentale (actualités récentes) pour une prise de décision optimale.")
+st.title("🎯 Bot d'Analyse Trading Technique & Fondamental (Mondial)")
+st.markdown("Analyse technique (chandelles, indicateurs, pivots) et fondamentale (actualités en direct) sur toutes les actions US, Europe, Asie et cryptos.")
 
 # ---------------------------------------------------------
 # Configuration de la clé API & Modèle IA officiel
@@ -32,42 +32,79 @@ def generate_ai_report(prompt_text):
     return "### ⚠️ Erreur détaillée de l'API Gemini :\n\n" + "\n\n".join(error_details)
 
 # ---------------------------------------------------------
-# Dictionnaire des actifs principaux par classe
+# Dictionnaire enrichi (US, Europe, Asie, Cryptos, Forex...)
 # ---------------------------------------------------------
 ASSETS_DICTIONARY = {
-    "Matières Premières (Commodities)": {
+    "🇺🇸 Actions USA (Wall Street)": {
+        "Apple": "AAPL",
+        "Nvidia": "NVDA",
+        "Microsoft": "MSFT",
+        "Amazon": "AMZN",
+        "Alphabet (Google)": "GOOGL",
+        "Meta (Facebook)": "META",
+        "Tesla": "TSLA",
+        "AMD": "AMD",
+        "Berkshire Hathaway": "BRK-B",
+        "Eli Lilly": "LLY",
+        "Broadcom": "AVGO",
+        "JPMorgan Chase": "JPM"
+    },
+    "🇪🇺 Actions Europe (Euronext, DAX, LSE)": {
+        "TotalEnergies (France)": "TTE.PA",
+        "LVMH (France)": "MC.PA",
+        "ASML (Pays-Bas)": "ASML.AS",
+        "SAP (Allemagne)": "SAP.DE",
+        "Siemens (Allemagne)": "SIE.DE",
+        "Sanofi (France)": "SAN.PA",
+        "Schneider Electric (France)": "SU.PA",
+        "Airbus (France/DE)": "AIR.PA",
+        "Shell (UK/NL)": "SHEL.L",
+        "Novo Nordisk (Danemark)": "NOVO-B.CO",
+        "Ferrari (Italie)": "RACE.MI"
+    },
+    "🌏 Actions Asie & Pacifique": {
+        "TSMC (Taïwan - ADR US)": "TSM",
+        "Toyota (Japon)": "7203.T",
+        "Sony (Japon)": "6758.T",
+        "SoftBank (Japon)": "9984.T",
+        "Tencent (Hong Kong)": "0700.HK",
+        "Alibaba (Hong Kong)": "9988.HK",
+        "Samsung Electronics (Corée)": "005930.KS",
+        "Reliance Industries (Inde)": "RELIANCE.NS",
+        "BHP Group (Australie)": "BHP.AX"
+    },
+    "📊 Indices Boursiers": {
+        "S&P 500 (USA)": "^GSPC",
+        "Nasdaq 100 (USA)": "^IXIC",
+        "Dow Jones (USA)": "^DJI",
+        "CAC 40 (France)": "^FCHI",
+        "DAX 40 (Allemagne)": "^GDAXI",
+        "FTSE 100 (Royaume-Uni)": "^FTSE",
+        "Nikkei 225 (Japon)": "^N225",
+        "Hang Seng (Hong Kong)": "^HSI"
+    },
+    "🛢️ Matières Premières": {
         "Pétrole Brent": "BZ=F",
         "Pétrole WTI": "CL=F",
         "Or (Gold)": "GC=F",
         "Argent (Silver)": "SI=F",
-        "Gaz Naturel": "NG=F"
+        "Gaz Naturel": "NG=F",
+        "Cuivre": "HG=F"
     },
-    "Forex (Devises)": {
+    "💱 Forex (Devises)": {
         "EUR/USD": "EURUSD=X",
         "GBP/USD": "GBPUSD=X",
         "USD/JPY": "USDJPY=X",
         "AUD/USD": "AUDUSD=X",
-        "USD/CAD": "USDCAD=X"
+        "USD/CAD": "USDCAD=X",
+        "EUR/GBP": "EURGBP=X"
     },
-    "Indices Boursiers": {
-        "CAC 40": "^FCHI",
-        "S&P 500": "^GSPC",
-        "Nasdaq 100": "^IXIC",
-        "DAX 40": "^GDAXI",
-        "Dow Jones": "^DJI"
-    },
-    "Cryptomonnaies": {
+    "🪙 Cryptomonnaies": {
         "Bitcoin (BTC/USD)": "BTC-USD",
         "Ethereum (ETH/USD)": "ETH-USD",
         "Solana (SOL-USD)": "SOL-USD",
-        "Ripple (XRP-USD)": "XRP-USD"
-    },
-    "Actions (US / FR)": {
-        "Apple": "AAPL",
-        "Nvidia": "NVDA",
-        "Tesla": "TSLA",
-        "TotalEnergies": "TTE.PA",
-        "LVMH": "MC.PA"
+        "Ripple (XRP-USD)": "XRP-USD",
+        "Binance Coin (BNB-USD)": "BNB-USD"
     }
 }
 
@@ -95,22 +132,33 @@ def get_recent_news(ticker_str):
         return ["Impossible de récupérer les actualités récentes pour cet actif."]
 
 # ---------------------------------------------------------
-# Barre latérale : Sélection de l'actif (Menu + Saisie Libre)
+# Barre latérale : Sélection globale
 # ---------------------------------------------------------
 st.sidebar.header("1. Sélection de l'Actif")
 
-# Champ de recherche universel pour TOUS les actifs tradables mondiaux
-custom_ticker_input = st.sidebar.text_input("🔍 Ticker personnalisé (ex: MSFT, TSLA, ETH-EUR...)", "").strip()
+# Recherche libre universelle
+custom_ticker_input = st.sidebar.text_input("🔍 Ticker libre (ex: BABA, 7203.T, TTE.PA...)", "").strip()
 
 if custom_ticker_input:
     ticker_symbol = custom_ticker_input.upper()
     selected_asset_name = custom_ticker_input.upper()
-    st.sidebar.info(f"Actif personnalisé actif : `{ticker_symbol}`")
+    st.sidebar.info(f"Ticker personnalisé actif : `{ticker_symbol}`")
 else:
-    selected_category = st.sidebar.selectbox("Ou sélectionnez la Classe", list(ASSETS_DICTIONARY.keys()))
+    selected_category = st.sidebar.selectbox("Sélectionnez la Catégorie", list(ASSETS_DICTIONARY.keys()))
     selected_asset_name = st.sidebar.selectbox("Sélectionnez l'Actif", list(ASSETS_DICTIONARY[selected_category].keys()))
     ticker_symbol = ASSETS_DICTIONARY[selected_category][selected_asset_name]
     st.sidebar.markdown(f"**Ticker Yahoo Finance :** `{ticker_symbol}`")
+
+with st.sidebar.expander("ℹ️ Suffixes boursiers mondiaux"):
+    st.markdown("""
+    Pour chercher n'importe quelle action mondiale, ajoutez son extension :
+    * **France :** `.PA` (ex: `AIR.PA`)
+    * **Allemagne :** `.DE` (ex: `BMW.DE`)
+    * **Londres :** `.L` (ex: `BP.L`)
+    * **Japon :** `.T` (ex: `7203.T`)
+    * **Hong Kong :** `.HK` (ex: `0700.HK`)
+    * **USA :** Pas de suffixe (ex: `NVDA`)
+    """)
 
 st.sidebar.success("🔑 Clé API pré-configurée avec succès !")
 
@@ -139,7 +187,7 @@ if selected_timeframe:
         news_text = "\n".join(recent_news_list)
 
         if df.empty or 'Close' not in df.columns:
-            st.error(f"Erreur : Impossible de récupérer les données pour le ticker `{ticker_symbol}`. Vérifiez l'orthographe (ex: AAPL, BTC-USD, EURUSD=X).")
+            st.error(f"Erreur : Impossible de récupérer les données pour `{ticker_symbol}`. Vérifiez la valeur ou le suffixe boursier (ex: `.PA`, `.DE`, `.T`).")
         else:
             df['MM50'] = df['Close'].rolling(window=50).mean()
             df['MM100'] = df['Close'].rolling(window=100).mean()
@@ -222,74 +270,4 @@ if selected_timeframe:
             - **Point d'entrée recommandé :** [Prix exact ex: 108.50]
             - **Stop Loss (SL) :** [Prix exact ex: 110.10]
             - **Take Profit 1 (TP1) :** [Prix exact ex: 106.00]
-            - **Take Profit 2 (TP2) :** [Prix exact ex: 104.00]
-            - **Ratio Risque / Récompense (R/R) :** [ex: 1:2.5]
-            - **Justification :** [Raison technique + alignment fondamental]
-            """
-
-            with st.spinner("Génération de l'analyse globale (Technique + Fondamentale)..."):
-                ai_text = generate_ai_report(prompt)
-
-            # --- CONSTRUCTION DU GRAPHIQUE EN CHANDELLES MATPLOTLIB ---
-            fig, ax = plt.subplots(figsize=(10, 5))
-            
-            df_reset = df.reset_index()
-            x = range(len(df_reset))
-            
-            up_color = '#26a69a'   # Vert bougie haussière
-            down_color = '#ef5350' # Rouge bougie baissière
-
-            for i in x:
-                row = df_reset.iloc[i]
-                o, h, l, c = row['Open'], row['High'], row['Low'], row['Close']
-                color = up_color if c >= o else down_color
-                
-                ax.vlines(i, l, h, color=color, linewidth=1)
-                body_bottom = min(o, c)
-                body_height = abs(c - o)
-                if body_height == 0:
-                    body_height = 0.01
-                ax.bar(i, body_height, bottom=body_bottom, color=color, width=0.6)
-
-            if 'MM50' in df_reset.columns and df_reset['MM50'].notna().any():
-                ax.plot(x, df_reset['MM50'], label='MM 50', color='orange', linewidth=1)
-            if 'MM200' in df_reset.columns and df_reset['MM200'].notna().any():
-                ax.plot(x, df_reset['MM200'], label='MM 200', color='purple', linewidth=1)
-
-            if pivot > 0:
-                ax.axhline(y=pivot, color='gray', linestyle='--', alpha=0.7, label=f'Pivot: {pivot:.2f}')
-
-            n_ticks = min(6, len(df_reset))
-            step = max(1, len(df_reset) // n_ticks)
-            tick_indices = list(range(0, len(df_reset), step))
-            date_col = 'Datetime' if 'Datetime' in df_reset.columns else 'Date'
-            tick_labels = [str(df_reset.iloc[i][date_col]).split()[0] for i in tick_indices]
-            
-            ax.set_xticks(tick_indices)
-            ax.set_xticklabels(tick_labels, rotation=30, fontsize=9)
-
-            ax.set_facecolor('#0e1117')
-            fig.patch.set_facecolor('#0e1117')
-            ax.tick_params(colors='white')
-            ax.xaxis.label.set_color('white')
-            ax.yaxis.label.set_color('white')
-            ax.title.set_color('white')
-            for spine in ax.spines.values():
-                spine.set_edgecolor('gray')
-
-            ax.set_title(f"Graphique en Chandelles — {selected_asset_name} ({selected_timeframe})", fontsize=12)
-            ax.legend(loc='upper left', facecolor='#262730', edgecolor='none', labelcolor='white')
-            ax.grid(True, linestyle=':', alpha=0.3, color='gray')
-
-            # --- AFFICHAGE STREAMLIT ---
-            st.markdown("---")
-            
-            with st.expander("📰 Voir les flux d'actualités récents capturés", expanded=False):
-                for headline in recent_news_list:
-                    st.write(headline)
-
-            st.pyplot(fig)
-
-            st.markdown("---")
-            st.markdown("### 📊 Rapport d'Analyse Global")
-            st.markdown(ai_text)
+            -
