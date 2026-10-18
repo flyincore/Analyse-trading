@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 st.set_page_config(page_title="Bot Trading Technique & Fondamental", layout="wide")
 
 st.title("🎯 Bot d'Analyse Technique & Fondamentale Multi-Actifs")
-st.markdown("Combinez l'analyse technique (indicateurs, pivots, graphique) et l'analyse fondamentale (actualités récentes) pour une prise de décision optimale.")
+st.markdown("Combinez l'analyse technique (chandelles, indicateurs, pivots) et l'analyse fondamentale (actualités récentes) pour une prise de décision optimale.")
 
 # ---------------------------------------------------------
 # Configuration de la clé API & Modèle IA officiel
@@ -17,7 +17,6 @@ API_KEY = "AQ.Ab8RN6KvFijAko4RVnTWf9Uf3qE4lVbXgrMsTXay1utBmqq5-w"
 genai.configure(api_key=API_KEY)
 
 def generate_ai_report(prompt_text):
-    # Utilisation du modèle exact demandé par l'API Google
     models_to_try = ['gemini-3.8-flash', 'gemini-1.5-flash', 'gemini-pro']
     error_details = []
     
@@ -223,40 +222,7 @@ if selected_timeframe:
             with st.spinner("Génération de l'analyse globale (Technique + Fondamentale)..."):
                 ai_text = generate_ai_report(prompt)
 
-            # --- CONSTRUCTION DU GRAPHIQUE STABLE MATPLOTLIB ---
+            # --- CONSTRUCTION DU GRAPHIQUE EN CHANDELLES MATPLOTLIB ---
             fig, ax = plt.subplots(figsize=(10, 5))
-            ax.plot(df.index, df['Close'], label='Prix Clôture', color='#00d2ff', linewidth=1.5)
             
-            if 'MM50' in df.columns:
-                ax.plot(df.index, df['MM50'], label='MM 50', color='orange', linewidth=1)
-            if 'MM200' in df.columns:
-                ax.plot(df.index, df['MM200'], label='MM 200', color='purple', linewidth=1)
-
-            if pivot > 0:
-                ax.axhline(y=pivot, color='gray', linestyle='--', alpha=0.7, label=f'Pivot: {pivot:.2f}')
-
-            ax.set_facecolor('#0e1117')
-            fig.patch.set_facecolor('#0e1117')
-            ax.tick_params(colors='white')
-            ax.xaxis.label.set_color('white')
-            ax.yaxis.label.set_color('white')
-            ax.title.set_color('white')
-            for spine in ax.spines.values():
-                spine.set_edgecolor('gray')
-
-            ax.set_title(f"Graphique Technique — {selected_asset_name} ({selected_timeframe})", fontsize=12)
-            ax.legend(loc='upper left', facecolor='#262730', edgecolor='none', labelcolor='white')
-            ax.grid(True, linestyle=':', alpha=0.3, color='gray')
-
-            # --- AFFICHAGE STREAMLIT ---
-            st.markdown("---")
-            
-            with st.expander("📰 Voir les flux d'actualités récents capturés", expanded=False):
-                for headline in recent_news_list:
-                    st.write(headline)
-
-            st.pyplot(fig)
-
-            st.markdown("---")
-            st.markdown("### 📊 Rapport d'Analyse Global")
-            st.markdown(ai_text)
+            df_reset = df.reset
