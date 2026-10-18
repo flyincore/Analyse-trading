@@ -11,7 +11,7 @@ from datetime import datetime
 st.set_page_config(page_title="Bot Trading IA - Mondial & ISIN", layout="wide")
 
 st.title("🎯 Bot d'Analyse Trading Technique & Fondamental")
-st.markdown("Analyse technique complète, graphique global, journal de trading et gestion de l'historique.")
+st.markdown("Analyse technique complète, graphique global ultra-lisible, journal de trading et gestion de l'historique.")
 
 # ---------------------------------------------------------
 # Liste des clés API Gemini (Système de rotation / Fallback)
@@ -262,10 +262,10 @@ def get_recent_news(ticker_str):
         return ["Impossible de récupérer les actualités récentes pour cet actif."]
 
 # ---------------------------------------------------------
-# Graphique technique global lisible
+# Graphique technique global ultra-grand et très lisible
 # ---------------------------------------------------------
 def draw_global_chart(df, pivot, r1, r2, s1, s2, asset_name, timeframe):
-    fig, ax = plt.subplots(figsize=(11, 5.5))
+    fig, ax = plt.subplots(figsize=(13, 7))  # Graphique plus large et plus haut pour une lisibilité maximale
     
     df_reset = df.reset_index()
     x = df_reset.index.values
@@ -280,49 +280,49 @@ def draw_global_chart(df, pivot, r1, r2, s1, s2, asset_name, timeframe):
     up_color = '#26a69a'
     down_color = '#ef5350'
 
-    ax.vlines(x[up], lows[up], highs[up], color=up_color, linewidth=1.2)
-    ax.vlines(x[down], lows[down], highs[down], color=down_color, linewidth=1.2)
+    ax.vlines(x[up], lows[up], highs[up], color=up_color, linewidth=1.3)
+    ax.vlines(x[down], lows[down], highs[down], color=down_color, linewidth=1.3)
 
     body_bottom = np.minimum(opens, closes)
     body_height = np.abs(closes - opens)
     body_height[body_height == 0] = 0.01
 
-    ax.bar(x[up], body_height[up], bottom=body_bottom[up], color=up_color, width=0.6)
-    ax.bar(x[down], body_height[down], bottom=body_bottom[down], color=down_color, width=0.6)
+    ax.bar(x[up], body_height[up], bottom=body_bottom[up], color=up_color, width=0.65)
+    ax.bar(x[down], body_height[down], bottom=body_bottom[down], color=down_color, width=0.65)
 
     if 'MM50' in df_reset.columns and df_reset['MM50'].notna().any():
-        ax.plot(x, df_reset['MM50'], label='MM 50', color='orange', linewidth=1.5)
+        ax.plot(x, df_reset['MM50'], label='MM 50', color='orange', linewidth=1.8)
     if 'MM200' in df_reset.columns and df_reset['MM200'].notna().any():
-        ax.plot(x, df_reset['MM200'], label='MM 200', color='purple', linewidth=1.5)
+        ax.plot(x, df_reset['MM200'], label='MM 200', color='purple', linewidth=1.8)
 
     if pivot > 0:
-        ax.axhline(y=pivot, color='yellow', linestyle='--', alpha=0.8, label=f'Pivot: {pivot:.2f}')
-        ax.axhline(y=r1, color='red', linestyle=':', alpha=0.6, label=f'R1 Fib: {r1:.2f}')
-        ax.axhline(y=r2, color='darkred', linestyle=':', alpha=0.6, label=f'R2 Fib: {r2:.2f}')
-        ax.axhline(y=s1, color='limegreen', linestyle=':', alpha=0.6, label=f'S1 Fib: {s1:.2f}')
-        ax.axhline(y=s2, color='green', linestyle=':', alpha=0.6, label=f'S2 Fib: {s2:.2f}')
+        ax.axhline(y=pivot, color='yellow', linestyle='--', alpha=0.85, label=f'Pivot: {pivot:.2f}')
+        ax.axhline(y=r1, color='red', linestyle=':', alpha=0.65, label=f'R1 Fib: {r1:.2f}')
+        ax.axhline(y=r2, color='darkred', linestyle=':', alpha=0.65, label=f'R2 Fib: {r2:.2f}')
+        ax.axhline(y=s1, color='limegreen', linestyle=':', alpha=0.65, label=f'S1 Fib: {s1:.2f}')
+        ax.axhline(y=s2, color='green', linestyle=':', alpha=0.65, label=f'S2 Fib: {s2:.2f}')
 
-    n_ticks = min(6, len(df_reset))
+    n_ticks = min(7, len(df_reset))
     step = max(1, len(df_reset) // n_ticks)
     tick_indices = list(range(0, len(df_reset), step))
     date_col = 'Datetime' if 'Datetime' in df_reset.columns else 'Date'
     tick_labels = [str(df_reset.iloc[i][date_col]).split()[0] for i in tick_indices]
     
     ax.set_xticks(tick_indices)
-    ax.set_xticklabels(tick_labels, rotation=30, fontsize=10)
+    ax.set_xticklabels(tick_labels, rotation=25, fontsize=11)
 
     ax.set_facecolor('#0e1117')
     fig.patch.set_facecolor('#0e1117')
-    ax.tick_params(colors='white', labelsize=10)
+    ax.tick_params(colors='white', labelsize=11)
     ax.xaxis.label.set_color('white')
     ax.yaxis.label.set_color('white')
     ax.title.set_color('white')
     for spine in ax.spines.values():
         spine.set_edgecolor('gray')
 
-    ax.set_title(f"📈 Vue d'ensemble technique — {asset_name} ({timeframe})", fontsize=13, fontweight='bold')
-    ax.legend(loc='upper left', facecolor='#262730', edgecolor='none', labelcolor='white', fontsize=9)
-    ax.grid(True, linestyle=':', alpha=0.4, color='gray')
+    ax.set_title(f"📈 Vue d'ensemble technique — {asset_name} ({timeframe})", fontsize=15, fontweight='bold', pad=15)
+    ax.legend(loc='upper left', facecolor='#262730', edgecolor='none', labelcolor='white', fontsize=10)
+    ax.grid(True, linestyle=':', alpha=0.45, color='gray')
 
     plt.tight_layout()
     return fig
@@ -570,7 +570,7 @@ else:
         df = entry['df']
         pivot, r1, r2, s1, s2 = entry['pivot'], entry['r1'], entry['r2'], entry['s1'], entry['s2']
 
-        # GRAPHIQUE UNIQUE : Vue d'ensemble technique globale
+        # GRAPHIQUE UNIQUE : Vue d'ensemble technique globale ultra-lisible
         st.markdown("---")
         fig_global = draw_global_chart(df, pivot, r1, r2, s1, s2, entry['asset'], entry['tf'])
         st.pyplot(fig_global)
