@@ -4,12 +4,13 @@ import pandas as pd
 import numpy as np
 import google.generativeai as genai
 import matplotlib.pyplot as plt
+from datetime import datetime
 
 # Configuration de la page Streamlit
 st.set_page_config(page_title="Bot Trading IA - Mondial & ISIN", layout="wide")
 
 st.title("🎯 Bot d'Analyse Trading Technique & Fondamental")
-st.markdown("Analyse technique (chandelles, indicateurs, pivots Fibonacci) et fondamentale (actualités en direct) avec recherche par Ticker, ISIN ou Catégories.")
+st.markdown("Analyse technique (chandelles, indicateurs, pivots Fibonacci) et fondamentale (actualités en direct) avec journal de trading et suivi des performances.")
 
 # ---------------------------------------------------------
 # Liste des clés API Gemini (Système de rotation / Fallback)
@@ -122,8 +123,12 @@ def get_recent_news(ticker_str):
     except Exception:
         return ["Impossible de récupérer les actualités récentes pour cet actif."]
 
+# Initialisation du journal de trading en Session State
+if "trade_history" not in st.session_state:
+    st.session_state.trade_history = []
+
 # ---------------------------------------------------------
-# Barre latérale : Sélection globale
+# Barre latérale : Sélection globale & Historique
 # ---------------------------------------------------------
 st.sidebar.header("1. Sélection de l'Actif")
 
@@ -147,7 +152,20 @@ else:
 st.sidebar.success(f"🔑 {len(API_KEYS)} clé(s) API configurée(s) !")
 
 # ---------------------------------------------------------
-# Application Principale & Maintien de l'état (Session State)
+# Menu Déroulant Historique des Requêtes (Journal de Trading)
+# ---------------------------------------------------------
+st.sidebar.markdown("---")
+st.sidebar.header("📜 Historique des Requêtes")
+
+if st.session_state.trade_history:
+    options = [f"{item['id']} | {item['timestamp']} - {item['asset']} ({item['tf']})" for item in st.session_state.trade_history]
+    selected_history_item = st.sidebar.selectbox("Sélectionnez une analyse passée :", ["-- Nouvelles Analyses --"] + options)
+else:
+    st.sidebar.info("Aucune analyse enregistrée pour le moment.")
+    selected_history_item = "-- Nouvelles Analyses --"
+
+# ---------------------------------------------------------
+# Application Principale & Maintien de l'état
 # ---------------------------------------------------------
 st.subheader("2. Choisissez l'unité de temps pour l'analyse")
 
@@ -163,234 +181,279 @@ if col5.button("📅 D1", use_container_width=True):     st.session_state.select
 if col6.button("🗓️ Mois", use_container_width=True):   st.session_state.selected_timeframe = "Mois"
 if col7.button("📈 Années", use_container_width=True): st.session_state.selected_timeframe = "Années"
 
-selected_timeframe = st.session_state.selected_timeframe
-
-if selected_timeframe:
-    tf_info = TIMEFRAME_MAPPING[selected_timeframe]
+# Si un élément de l'historique est sélectionné
+if selected_history_item != "-- Nouvelles Analyses --":
+    selected_id = int(selected_history_item.split(" | ")[0])
+    entry = next(item for item in st.session_state.trade_history if item['id'] == selected_id)
     
-    with st.spinner(f"Chargement des données & actualités pour {selected_asset_name} ({selected_timeframe})..."):
-        df = yf.download(ticker_symbol, period=tf_info["period"], interval=tf_info["interval"], progress=False)
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
-
-        recent_news_list = get_recent_news(ticker_symbol)
-        news_text = "\n".join(recent_news_list)
-
-        if df.empty or 'Close' not in df.columns:
-            st.error(f"Erreur : Impossible de récupérer les données pour `{ticker_symbol}`. Vérifiez que le code ISIN ou le ticker est valide.")
+    st.markdown(f"## 📜 Analyse Archivée : {entry['asset']} ({entry['tf']}) — {entry['timestamp']}")
+    st.markdown(f"**Prix au moment de l'analyse :** {entry['price']:.2f}")
+    st.markdown("### 📊 Rapport d'Analyse Global")
+    st.markdown(entry['report'])
+    
+    st.markdown("---")
+    st.markdown("### 📋 Suivi de la Position")
+    
+    col_a, col_b = st.columns(2)
+    with col_a:
+        trade_executed = st.radio("Trade réalisé ?", ["Non", "Oui"], index=1 if entry['executed'] else 0, key=f"exec_{selected_id}")
+        entry['executed'] = (trade_executed == "Oui")
+        
+    with col_b:
+        if entry['executed']:
+            trade_result = st.radio("Résultat du trade :", ["En cours / Indéterminé", "Gagnant 🟢", "Perdant 🔴"], 
+                                    index=1 if entry['result'] == "Gagnant 🟢" else (2 if entry['result'] == "Perdant 🔴" else 0),
+                                    key=f"res_{selected_id}")
+            entry['result'] = trade_result
         else:
-            df['MM50'] = df['Close'].rolling(window=50).mean()
-            df['MM100'] = df['Close'].rolling(window=100).mean()
-            df['MM200'] = df['Close'].rolling(window=200).mean()
-            
-            delta = df['Close'].diff()
-            gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-            loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-            rs = gain / loss
-            df['RSI'] = 100 - (100 / (1 + rs))
+            entry['result'] = "N/A"
+            st.info("Cochez 'Oui' à 'Trade réalisé' pour renseigner le résultat.")
 
-            exp1 = df['Close'].ewm(span=12, adjust=False).mean()
-            exp2 = df['Close'].ewm(span=26, adjust=False).mean()
-            df['MACD'] = exp1 - exp2
-            df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
+else:
+    selected_timeframe = st.session_state.selected_timeframe
 
-            # Calcul des Pivots Fibonacci basés sur la bougie journalière précédente
-            df_d = yf.download(ticker_symbol, period="5d", interval="1d", progress=False)
-            if isinstance(df_d.columns, pd.MultiIndex):
-                df_d.columns = df_d.columns.get_level_values(0)
-            
-            if len(df_d) >= 2:
-                prev_day = df_d.iloc[-2]
-                h, l, c = float(prev_day['High']), float(prev_day['Low']), float(prev_day['Close'])
-                pivot = (h + l + c) / 3
-                r1 = pivot + 0.382 * (h - l)
-                r2 = pivot + 0.618 * (h - l)
-                s1 = pivot - 0.382 * (h - l)
-                s2 = pivot - 0.618 * (h - l)
+    if selected_timeframe:
+        tf_info = TIMEFRAME_MAPPING[selected_timeframe]
+        
+        with st.spinner(f"Chargement des données & actualités pour {selected_asset_name} ({selected_timeframe})..."):
+            df = yf.download(ticker_symbol, period=tf_info["period"], interval=tf_info["interval"], progress=False)
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = df.columns.get_level_values(0)
+
+            recent_news_list = get_recent_news(ticker_symbol)
+            news_text = "\n".join(recent_news_list)
+
+            if df.empty or 'Close' not in df.columns:
+                st.error(f"Erreur : Impossible de récupérer les données pour `{ticker_symbol}`. Vérifiez que le code ISIN ou le ticker est valide.")
             else:
-                pivot, r1, r2, s1, s2 = 0.0, 0.0, 0.0, 0.0, 0.0
+                df['MM50'] = df['Close'].rolling(window=50).mean()
+                df['MM100'] = df['Close'].rolling(window=100).mean()
+                df['MM200'] = df['Close'].rolling(window=200).mean()
+                
+                delta = df['Close'].diff()
+                gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+                loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+                rs = gain / loss
+                df['RSI'] = 100 - (100 / (1 + rs))
 
-            latest = df.iloc[-1]
-            current_price = float(latest['Close'])
-            mm50 = float(latest.get('MM50', 0)) if pd.notna(latest.get('MM50')) else 0.0
-            mm100 = float(latest.get('MM100', 0)) if pd.notna(latest.get('MM100')) else 0.0
-            mm200 = float(latest.get('MM200', 0)) if pd.notna(latest.get('MM200')) else 0.0
-            rsi = float(latest.get('RSI', 0)) if pd.notna(latest.get('RSI')) else 0.0
-            macd_line = float(latest.get('MACD', 0)) if pd.notna(latest.get('MACD')) else 0.0
-            macd_signal = float(latest.get('MACD_Signal', 0)) if pd.notna(latest.get('MACD_Signal')) else 0.0
+                exp1 = df['Close'].ewm(span=12, adjust=False).mean()
+                exp2 = df['Close'].ewm(span=26, adjust=False).mean()
+                df['MACD'] = exp1 - exp2
+                df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
 
-            prompt = f"""
-            Tu es un système expert en trading quantitatif et analyse macroéconomique / fondamentale.
-            Analyse l'actif **{selected_asset_name} ({ticker_symbol})** en unité de temps **{selected_timeframe}**.
+                df_d = yf.download(ticker_symbol, period="5d", interval="1d", progress=False)
+                if isinstance(df_d.columns, pd.MultiIndex):
+                    df_d.columns = df_d.columns.get_level_values(0)
+                
+                if len(df_d) >= 2:
+                    prev_day = df_d.iloc[-2]
+                    h, l, c = float(prev_day['High']), float(prev_day['Low']), float(prev_day['Close'])
+                    pivot = (h + l + c) / 3
+                    r1 = pivot + 0.382 * (h - l)
+                    r2 = pivot + 0.618 * (h - l)
+                    s1 = pivot - 0.382 * (h - l)
+                    s2 = pivot - 0.618 * (h - l)
+                else:
+                    pivot, r1, r2, s1, s2 = 0.0, 0.0, 0.0, 0.0, 0.0
 
-            ### DONNÉES TECHNIQUES :
-            - Prix actuel : {current_price:.2f}
-            - MM50 = {mm50:.2f} | MM100 = {mm100:.2f} | MM200 = {mm200:.2f}
-            - RSI (14) = {rsi:.2f}
-            - MACD Line = {macd_line:.3f} | Signal = {macd_signal:.3f}
-            - **POINTS DE PIVOT FIBONACCI :**
-              * Résistance 2 (R2) : {r2:.2f}
-              * Résistance 1 (R1) : {r1:.2f}
-              * Point Pivot Central (P) : {pivot:.2f}
-              * Support 1 (S1) : {s1:.2f}
-              * Support 2 (S2) : {s2:.2f}
+                latest = df.iloc[-1]
+                current_price = float(latest['Close'])
+                mm50 = float(latest.get('MM50', 0)) if pd.notna(latest.get('MM50')) else 0.0
+                mm100 = float(latest.get('MM100', 0)) if pd.notna(latest.get('MM100')) else 0.0
+                mm200 = float(latest.get('MM200', 0)) if pd.notna(latest.get('MM200')) else 0.0
+                rsi = float(latest.get('RSI', 0)) if pd.notna(latest.get('RSI')) else 0.0
+                macd_line = float(latest.get('MACD', 0)) if pd.notna(latest.get('MACD')) else 0.0
+                macd_signal = float(latest.get('MACD_Signal', 0)) if pd.notna(latest.get('MACD_Signal')) else 0.0
 
-            ### ACTUALITÉS ET FLUX D'INFORMATIONS RÉCENTS :
-            {news_text}
+                prompt = f"""
+                Tu es un système expert en trading quantitatif et analyse macroéconomique / fondamentale.
+                Analyse l'actif **{selected_asset_name} ({ticker_symbol})** en unité de temps **{selected_timeframe}**.
 
-            Fournis un rapport complet structuré STRICTEMENT ainsi :
+                ### DONNÉES TECHNIQUES :
+                - Prix actuel : {current_price:.2f}
+                - MM50 = {mm50:.2f} | MM100 = {mm100:.2f} | MM200 = {mm200:.2f}
+                - RSI (14) = {rsi:.2f}
+                - MACD Line = {macd_line:.3f} | Signal = {macd_signal:.3f}
+                - **POINTS DE PIVOT FIBONACCI :**
+                  * Résistance 2 (R2) : {r2:.2f}
+                  * Résistance 1 (R1) : {r1:.2f}
+                  * Point Pivot Central (P) : {pivot:.2f}
+                  * Support 1 (S1) : {s1:.2f}
+                  * Support 2 (S2) : {s2:.2f}
 
-            ### 1. 📰 ANALYSE FONDAMENTALE ET ACTUALITÉS
-            - Synthèse des dernières actualités majeures affectant l'actif.
-            - Impact fondamental sur le prix à court/moyen terme (Haussier, Baisse, Neutre).
-            - Facteurs macroéconomiques ou catalyseurs majeurs à surveiller.
+                ### ACTUALITÉS ET FLUX D'INFORMATIONS RÉCENTS :
+                {news_text}
 
-            ---
+                Fournis un rapport complet structuré STRICTEMENT ainsi :
 
-            ### 2. 📊 SYNTHÈSE TENDANCE TECHNIQUE ET PIVOTS FIBONACCI ({selected_timeframe})
-            - Position actuelle du prix par rapport au Pivot Central, S1/S2 et R1/R2.
-            - Analyse croisée avec les moyennes mobiles (MM50/100/200), RSI et MACD.
+                ### 1. 📰 ANALYSE FONDAMENTALE ET ACTUALITÉS
+                - Synthèse des dernières actualités majeures affectant l'actif.
+                - Impact fondamental sur le prix à court/moyen terme (Haussier, Baisse, Neutre).
+                - Facteurs macroéconomiques ou catalyseurs majeurs à surveiller.
 
-            ---
+                ---
 
-            ### 🟢 SCÉNARIO D'ACHAT (BUY / LONG) - {selected_timeframe}
-            - **Point d'entrée recommandé :** [Prix exact ex: 107.50]
-            - **Stop Loss (SL) :** [Niveau basé sur S1 ou S2 ex: 105.20]
-            - **Take Profit 1 (TP1) :** [Niveau basé sur Pivot ou R1 ex: 109.00]
-            - **Take Profit 2 (TP2) :** [Niveau basé sur R2 ex: 111.50]
-            - **Ratio Risque / Récompense (R/R) :** [ex: 1:2]
-            - **Justification :** [Confluence technique entre Pivots Fibonacci, MMs et contexte fondamental]
+                ### 2. 📊 SYNTHÈSE TENDANCE TECHNIQUE ET PIVOTS FIBONACCI ({selected_timeframe})
+                - Position actuelle du prix par rapport au Pivot Central, S1/S2 et R1/R2.
+                - Analyse croisée avec les moyennes mobiles (MM50/100/200), RSI et MACD.
 
-            ---
+                ---
 
-            ### 🔴 SCÉNARIO DE VENTE (SELL / SHORT) - {selected_timeframe}
-            - **Point d'entrée recommandé :** [Prix exact ex: 108.50]
-            - **Stop Loss (SL) :** [Niveau basé sur R1 ou R2 ex: 110.10]
-            - **Take Profit 1 (TP1) :** [Niveau basé sur Pivot ou S1 ex: 106.00]
-            - **Take Profit 2 (TP2) :** [Niveau basé sur S2 ex: 104.00]
-            - **Ratio Risque / Récompense (R/R) :** [ex: 1:2.5]
-            - **Justification :** [Confluence technique entre Pivots Fibonacci, MMs et contexte fondamental]
-            """
+                ### 🟢 SCÉNARIO D'ACHAT (BUY / LONG) - {selected_timeframe}
+                - **Point d'entrée recommandé :** [Prix exact ex: 107.50]
+                - **Stop Loss (SL) :** [Niveau basé sur S1 ou S2 ex: 105.20]
+                - **Take Profit 1 (TP1) :** [Niveau basé sur Pivot ou R1 ex: 109.00]
+                - **Take Profit 2 (TP2) :** [Niveau basé sur R2 ex: 111.50]
+                - **Ratio Risque / Récompense (R/R) :** [ex: 1:2]
+                - **Justification :** [Confluence technique entre Pivots Fibonacci, MMs et contexte fondamental]
 
-            with st.spinner("Génération de l'analyse globale (Technique + Fondamentale)..."):
-                ai_text = generate_ai_report(prompt)
+                ---
 
-            # --- CONSTRUCTION DU GRAPHIQUE EN CHANDELLES AVEC NIVEAUX FIBONACCI ---
-            fig, ax = plt.subplots(figsize=(10, 5))
-            
-            df_reset = df.reset_index()
-            x = df_reset.index.values
-            opens = df_reset['Open'].values
-            highs = df_reset['High'].values
-            lows = df_reset['Low'].values
-            closes = df_reset['Close'].values
-            
-            up = closes >= opens
-            down = closes < opens
+                ### 🔴 SCÉNARIO DE VENTE (SELL / SHORT) - {selected_timeframe}
+                - **Point d'entrée recommandé :** [Prix exact ex: 108.50]
+                - **Stop Loss (SL) :** [Niveau basé sur R1 ou R2 ex: 110.10]
+                - **Take Profit 1 (TP1) :** [Niveau basé sur Pivot ou S1 ex: 106.00]
+                - **Take Profit 2 (TP2) :** [Niveau basé sur S2 ex: 104.00]
+                - **Ratio Risque / Récompense (R/R) :** [ex: 1:2.5]
+                - **Justification :** [Confluence technique entre Pivots Fibonacci, MMs et contexte fondamental]
+                """
 
-            up_color = '#26a69a'   # Vert
-            down_color = '#ef5350' # Rouge
+                with st.spinner("Génération de l'analyse globale (Technique + Fondamentale)..."):
+                    ai_text = generate_ai_report(prompt)
 
-            ax.vlines(x[up], lows[up], highs[up], color=up_color, linewidth=1)
-            ax.vlines(x[down], lows[down], highs[down], color=down_color, linewidth=1)
+                # Sauvegarde automatique dans le journal d'historique s'il ne s'agit pas d'un doublon direct
+                timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+                new_id = len(st.session_state.trade_history) + 1
+                
+                # Vérification pour éviter les doublons lors du rechargement de la page
+                if not st.session_state.trade_history or st.session_state.trade_history[-1]['report'] != ai_text:
+                    st.session_state.trade_history.append({
+                        "id": new_id,
+                        "timestamp": timestamp_str,
+                        "asset": selected_asset_name,
+                        "ticker": ticker_symbol,
+                        "tf": selected_timeframe,
+                        "price": current_price,
+                        "report": ai_text,
+                        "executed": False,
+                        "result": "N/A"
+                    })
 
-            body_bottom = np.minimum(opens, closes)
-            body_height = np.abs(closes - opens)
-            body_height[body_height == 0] = 0.01
+                # --- CONSTRUCTION DU GRAPHIQUE EN CHANDELLES ---
+                fig, ax = plt.subplots(figsize=(10, 5))
+                
+                df_reset = df.reset_index()
+                x = df_reset.index.values
+                opens = df_reset['Open'].values
+                highs = df_reset['High'].values
+                lows = df_reset['Low'].values
+                closes = df_reset['Close'].values
+                
+                up = closes >= opens
+                down = closes < opens
 
-            ax.bar(x[up], body_height[up], bottom=body_bottom[up], color=up_color, width=0.6)
-            ax.bar(x[down], body_height[down], bottom=body_bottom[down], color=down_color, width=0.6)
+                up_color = '#26a69a'   # Vert
+                down_color = '#ef5350' # Rouge
 
-            if 'MM50' in df_reset.columns and df_reset['MM50'].notna().any():
-                ax.plot(x, df_reset['MM50'], label='MM 50', color='orange', linewidth=1)
-            if 'MM200' in df_reset.columns and df_reset['MM200'].notna().any():
-                ax.plot(x, df_reset['MM200'], label='MM 200', color='purple', linewidth=1)
+                ax.vlines(x[up], lows[up], highs[up], color=up_color, linewidth=1)
+                ax.vlines(x[down], lows[down], highs[down], color=down_color, linewidth=1)
 
-            # Affichage des niveaux de Pivots Fibonacci sur le graphique
-            if pivot > 0:
-                ax.axhline(y=pivot, color='yellow', linestyle='--', alpha=0.8, label=f'Pivot: {pivot:.2f}')
-                ax.axhline(y=r1, color='red', linestyle=':', alpha=0.6, label=f'R1 Fib: {r1:.2f}')
-                ax.axhline(y=r2, color='darkred', linestyle=':', alpha=0.6, label=f'R2 Fib: {r2:.2f}')
-                ax.axhline(y=s1, color='limegreen', linestyle=':', alpha=0.6, label=f'S1 Fib: {s1:.2f}')
-                ax.axhline(y=s2, color='green', linestyle=':', alpha=0.6, label=f'S2 Fib: {s2:.2f}')
+                body_bottom = np.minimum(opens, closes)
+                body_height = np.abs(closes - opens)
+                body_height[body_height == 0] = 0.01
 
-            n_ticks = min(6, len(df_reset))
-            step = max(1, len(df_reset) // n_ticks)
-            tick_indices = list(range(0, len(df_reset), step))
-            date_col = 'Datetime' if 'Datetime' in df_reset.columns else 'Date'
-            tick_labels = [str(df_reset.iloc[i][date_col]).split()[0] for i in tick_indices]
-            
-            ax.set_xticks(tick_indices)
-            ax.set_xticklabels(tick_labels, rotation=30, fontsize=9)
+                ax.bar(x[up], body_height[up], bottom=body_bottom[up], color=up_color, width=0.6)
+                ax.bar(x[down], body_height[down], bottom=body_bottom[down], color=down_color, width=0.6)
 
-            ax.set_facecolor('#0e1117')
-            fig.patch.set_facecolor('#0e1117')
-            ax.tick_params(colors='white')
-            ax.xaxis.label.set_color('white')
-            ax.yaxis.label.set_color('white')
-            ax.title.set_color('white')
-            for spine in ax.spines.values():
-                spine.set_edgecolor('gray')
+                if 'MM50' in df_reset.columns and df_reset['MM50'].notna().any():
+                    ax.plot(x, df_reset['MM50'], label='MM 50', color='orange', linewidth=1)
+                if 'MM200' in df_reset.columns and df_reset['MM200'].notna().any():
+                    ax.plot(x, df_reset['MM200'], label='MM 200', color='purple', linewidth=1)
 
-            ax.set_title(f"Graphique en Chandelles & Pivots Fibonacci — {selected_asset_name} ({selected_timeframe})", fontsize=12)
-            ax.legend(loc='upper left', facecolor='#262730', edgecolor='none', labelcolor='white')
-            ax.grid(True, linestyle=':', alpha=0.3, color='gray')
+                if pivot > 0:
+                    ax.axhline(y=pivot, color='yellow', linestyle='--', alpha=0.8, label=f'Pivot: {pivot:.2f}')
+                    ax.axhline(y=r1, color='red', linestyle=':', alpha=0.6, label=f'R1 Fib: {r1:.2f}')
+                    ax.axhline(y=r2, color='darkred', linestyle=':', alpha=0.6, label=f'R2 Fib: {r2:.2f}')
+                    ax.axhline(y=s1, color='limegreen', linestyle=':', alpha=0.6, label=f'S1 Fib: {s1:.2f}')
+                    ax.axhline(y=s2, color='green', linestyle=':', alpha=0.6, label=f'S2 Fib: {s2:.2f}')
 
-            # --- AFFICHAGE STREAMLIT ---
-            st.markdown("---")
-            
-            with st.expander("📰 Voir les flux d'actualités récents capturés", expanded=False):
-                for headline in recent_news_list:
-                    st.write(headline)
+                n_ticks = min(6, len(df_reset))
+                step = max(1, len(df_reset) // n_ticks)
+                tick_indices = list(range(0, len(df_reset), step))
+                date_col = 'Datetime' if 'Datetime' in df_reset.columns else 'Date'
+                tick_labels = [str(df_reset.iloc[i][date_col]).split()[0] for i in tick_indices]
+                
+                ax.set_xticks(tick_indices)
+                ax.set_xticklabels(tick_labels, rotation=30, fontsize=9)
 
-            st.pyplot(fig)
+                ax.set_facecolor('#0e1117')
+                fig.patch.set_facecolor('#0e1117')
+                ax.tick_params(colors='white')
+                ax.xaxis.label.set_color('white')
+                ax.yaxis.label.set_color('white')
+                ax.title.set_color('white')
+                for spine in ax.spines.values():
+                    spine.set_edgecolor('gray')
 
-            st.markdown("---")
-            st.markdown("### 📊 Rapport d'Analyse Global")
-            st.markdown(ai_text)
+                ax.set_title(f"Graphique en Chandelles & Pivots Fibonacci — {selected_asset_name} ({selected_timeframe})", fontsize=12)
+                ax.legend(loc='upper left', facecolor='#262730', edgecolor='none', labelcolor='white')
+                ax.grid(True, linestyle=':', alpha=0.3, color='gray')
 
-            # ---------------------------------------------------------
-            # 💬 CHAT INTERACTIF AVEC GEMINI POUR AFFINER L'ANALYSE
-            # ---------------------------------------------------------
-            st.markdown("---")
-            st.markdown("### 💬 Affiner l'analyse avec Gemini")
-            st.markdown("Posez vos questions complémentaires sur ce trade (gestion du risque, scénarios alternatifs, psychologie de marché, etc.) :")
+                # --- AFFICHAGE STREAMLIT ---
+                st.markdown("---")
+                
+                with st.expander("📰 Voir les flux d'actualités récents capturés", expanded=False):
+                    for headline in recent_news_list:
+                        st.write(headline)
 
-            chat_key = f"chat_history_{ticker_symbol}_{selected_timeframe}"
-            if chat_key not in st.session_state:
-                st.session_state[chat_key] = []
+                st.pyplot(fig)
 
-            for message in st.session_state[chat_key]:
-                with st.chat_message(message["role"]):
-                    st.markdown(message["content"])
+                st.markdown("---")
+                st.markdown("### 📊 Rapport d'Analyse Global")
+                st.markdown(ai_text)
 
-            if user_query := st.chat_input("Ex: Quel serait un meilleur niveau de Stop Loss si la volatilité augmente ?"):
-                st.session_state[chat_key].append({"role": "user", "content": user_query})
-                with st.chat_message("user"):
-                    st.markdown(user_query)
+                # ---------------------------------------------------------
+                # 💬 CHAT INTERACTIF AVEC GEMINI POUR AFFINER L'ANALYSE
+                # ---------------------------------------------------------
+                st.markdown("---")
+                st.markdown("### 💬 Affiner l'analyse avec Gemini")
+                st.markdown("Posez vos questions complémentaires sur ce trade (gestion du risque, scénarios alternatifs, psychologie de marché, etc.) :")
 
-                with st.chat_message("assistant"):
-                    with st.spinner("Gemini analyse votre question..."):
-                        conversation_history = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state[chat_key][:-1]])
-                        
-                        chat_prompt = f"""
-                        Tu es un assistant expert en trading et analyse financière.
-                        Contexte de l'actif analysé :
-                        - Actif : {selected_asset_name} ({ticker_symbol})
-                        - Unité de temps : {selected_timeframe}
-                        - Prix actuel : {current_price:.2f}
-                        - Pivots Fibonacci : P={pivot:.2f}, S1={s1:.2f}, S2={s2:.2f}, R1={r1:.2f}, R2={r2:.2f}
-                        - Rapport d'analyse initial fourni à l'utilisateur :
-                        {ai_text}
+                chat_key = f"chat_history_{ticker_symbol}_{selected_timeframe}"
+                if chat_key not in st.session_state:
+                    st.session_state[chat_key] = []
 
-                        Historique de la conversation :
-                        {conversation_history}
+                for message in st.session_state[chat_key]:
+                    with st.chat_message(message["role"]):
+                        st.markdown(message["content"])
 
-                        Nouvelle question de l'utilisateur : {user_query}
+                if user_query := st.chat_input("Ex: Quel serait un meilleur niveau de Stop Loss si la volatilité augmente ?"):
+                    st.session_state[chat_key].append({"role": "user", "content": user_query})
+                    with st.chat_message("user"):
+                        st.markdown(user_query)
 
-                        Réponds de manière précise, argumentée et professionnelle en tant qu'expert quantitatif.
-                        """
-                        
-                        reply = generate_ai_report(chat_prompt)
-                        st.markdown(reply)
-                        st.session_state[chat_key].append({"role": "assistant", "content": reply})
+                    with st.chat_message("assistant"):
+                        with st.spinner("Gemini analyse votre question..."):
+                            conversation_history = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state[chat_key][:-1]])
+                            
+                            chat_prompt = f"""
+                            Tu es un assistant expert en trading et analyse financière.
+                            Contexte de l'actif analysé :
+                            - Actif : {selected_asset_name} ({ticker_symbol})
+                            - Unité de temps : {selected_timeframe}
+                            - Prix actuel : {current_price:.2f}
+                            - Pivots Fibonacci : P={pivot:.2f}, S1={s1:.2f}, S2={s2:.2f}, R1={r1:.2f}, R2={r2:.2f}
+                            - Rapport d'analyse initial fourni à l'utilisateur :
+                            {ai_text}
+
+                            Historique de la conversation :
+                            {conversation_history}
+
+                            Nouvelle question de l'utilisateur : {user_query}
+
+                            Réponds de manière précise, argumentée et professionnelle en tant qu'expert quantitatif.
+                            """
+                            
+                            reply = generate_ai_report(chat_prompt)
+                            st.markdown(reply)
+                            st.session_state[chat_key].append({"role": "assistant", "content": reply})
