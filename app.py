@@ -12,15 +12,23 @@ st.title("🎯 Bot d'Analyse Technique & Fondamentale Multi-Actifs")
 st.markdown("Combinez l'analyse technique (indicateurs, pivots, graphique) et l'analyse fondamentale (actualités récentes) pour une prise de décision optimale.")
 
 # ---------------------------------------------------------
-# Configuration de la clé API
+# Configuration de la clé API & Modèle IA robuste
 # ---------------------------------------------------------
 API_KEY = "AQ.Ab8RN6KvFijAko4RVnTWf9Uf3qE4lVbXgrMsTXay1utBmqq5-w"
 genai.configure(api_key=API_KEY)
 
-try:
-    model = genai.GenerativeModel('gemini-1.5-flash')
-except Exception:
-    model = None
+def generate_ai_report(prompt_text):
+    # Liste de modèles à tester par ordre de priorité
+    models_to_try = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro']
+    for m_name in models_to_try:
+        try:
+            m = genai.GenerativeModel(m_name)
+            response = m.generate_content(prompt_text)
+            if response and response.text:
+                return response.text
+        except Exception:
+            continue
+    return "Erreur : Aucun modèle Gemini compatible n'a pu générer l'analyse."
 
 # ---------------------------------------------------------
 # Dictionnaire des actifs par classe
@@ -124,25 +132,22 @@ if selected_timeframe:
         if df.empty or 'Close' not in df.columns:
             st.error("Erreur : Impossible de récupérer les données de marché.")
         else:
-            # Calculs techniques natifs (sans pandas-ta)
+            # Calculs techniques natifs
             df['MM50'] = df['Close'].rolling(window=50).mean()
             df['MM100'] = df['Close'].rolling(window=100).mean()
             df['MM200'] = df['Close'].rolling(window=200).mean()
             
-            # Calcul RSI (14)
             delta = df['Close'].diff()
             gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
             loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
             rs = gain / loss
             df['RSI'] = 100 - (100 / (1 + rs))
 
-            # Calcul MACD
             exp1 = df['Close'].ewm(span=12, adjust=False).mean()
             exp2 = df['Close'].ewm(span=26, adjust=False).mean()
             df['MACD'] = exp1 - exp2
             df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
 
-            # Pivots Fibonacci / Journaliers
             df_d = yf.download(ticker_symbol, period="5d", interval="1d", progress=False)
             if isinstance(df_d.columns, pd.MultiIndex):
                 df_d.columns = df_d.columns.get_level_values(0)
@@ -214,14 +219,8 @@ if selected_timeframe:
             - **Justification :** [Raison technique + alignment fondamental]
             """
 
-            ai_text = "Erreur d'initialisation de l'IA."
-            if model:
-                try:
-                    with st.spinner("Génération de l'analyse globale (Technique + Fondamentale)..."):
-                        response = model.generate_content(prompt)
-                        ai_text = response.text
-                except Exception as e:
-                    ai_text = f"Erreur lors de la génération par l'IA : {e}"
+            with st.spinner("Génération de l'analyse globale (Technique + Fondamentale)..."):
+                ai_text = generate_ai_report(prompt)
 
             # --- CONSTRUCTION DU GRAPHIQUE STABLE MATPLOTLIB ---
             fig, ax = plt.subplots(figsize=(10, 5))
