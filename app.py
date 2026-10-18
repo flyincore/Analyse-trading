@@ -5,13 +5,13 @@ import numpy as np
 import google.generativeai as genai
 import matplotlib.pyplot as plt
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Configuration de la page Streamlit
 st.set_page_config(page_title="Bot Trading IA - Mondial & ISIN", layout="wide")
 
 st.title("🎯 Bot d'Analyse Trading Technique & Fondamental")
-st.markdown("Analyse technique rapide (zoom 36h avec pivots Fibonacci complets), journal de trading et gestion de l'historique.")
+st.markdown("Analyse technique complète, graphique avec zoom optionnel 36h, pivots Fibonacci, journal de trading et gestion de l'historique.")
 
 # ---------------------------------------------------------
 # Liste des clés API Gemini (Système de rotation / Fallback)
@@ -236,11 +236,14 @@ ASSETS_DICTIONARY = {
     }
 }
 
-# Unité configurée pour capturer exactement les dernières 36 heures (période "2d" sous yfinance pour les intraday)
+# Restauration des unités de temps demandées
 TIMEFRAME_MAPPING = {
-    "M15 (Zoom 36h)": {"interval": "15m", "period": "2d"},
-    "M30 (Zoom 36h)": {"interval": "30m", "period": "2d"},
-    "H1 (Zoom 36h)":  {"interval": "1h",  "period": "2d"}
+    "M15":    {"interval": "15m", "period": "7d"},
+    "H1":     {"interval": "1h",  "period": "30d"},
+    "H4":     {"interval": "1h",  "period": "60d"},
+    "D1":     {"interval": "1d",  "period": "1y"},
+    "1 mois": {"interval": "1mo", "period": "5y"},
+    "1 an":   {"interval": "1mo", "period": "max"}
 }
 
 @st.cache_data(ttl=300)
@@ -273,12 +276,19 @@ def get_recent_news(ticker_str):
         return ["Impossible de récupérer les actualités récentes pour cet actif."]
 
 # ---------------------------------------------------------
-# Graphique technique global (Zoom 36h avec TOUS les pivots Fibonacci)
+# Graphique technique avec option de zoom 36h et Pivots complets
 # ---------------------------------------------------------
-def draw_global_chart(df, pivot, r1, r2, s1, s2, asset_name, timeframe):
+def draw_global_chart(df, pivot, r1, r2, s1, s2, asset_name, timeframe, zoom_36h=False):
+    # Filtrage optionnel pour ne garder que les dernières 36 heures si demandé et si les données ont des horodatages
+    df_plot = df.copy()
+    if zoom_36h and timeframe in ["M15", "H1", "H4"]:
+        if isinstance(df_plot.index, pd.DatetimeIndex) and len(df_plot) > 0:
+            cutoff_time = df_plot.index[-1] - timedelta(hours=36)
+            df_plot = df_plot[df_plot.index >= cutoff_time]
+
     fig, ax = plt.subplots(figsize=(13, 7.5))
     
-    df_reset = df.reset_index()
+    df_reset = df_plot.reset_index()
     x = df_reset.index.values
     opens = df_reset['Open'].values
     highs = df_reset['High'].values
@@ -330,7 +340,8 @@ def draw_global_chart(df, pivot, r1, r2, s1, s2, asset_name, timeframe):
     for spine in ax.spines.values():
         spine.set_edgecolor('gray')
 
-    ax.set_title(f"📈 Zoom Dernières 36 Heures & Pivots Fibonacci — {asset_name} ({timeframe})", fontsize=15, fontweight='bold', pad=15)
+    zoom_label = " (Zoom Dernières 36h)" if zoom_36h and timeframe in ["M15", "H1", "H4"] else ""
+    ax.set_title(f"📈 Vue Technique & Pivots Fibonacci — {asset_name} ({timeframe}){zoom_label}", fontsize=15, fontweight='bold', pad=15)
     ax.legend(loc='upper left', facecolor='#262730', edgecolor='none', labelcolor='white', fontsize=10)
     ax.grid(True, linestyle=':', alpha=0.45, color='gray')
 
@@ -420,9 +431,11 @@ else:
 if st.session_state.active_tab == "new":
     st.subheader("2. Paramétrage & Lancement de l'Analyse")
     
-    col_tf, col_btn = st.columns([2, 1])
+    col_tf, col_zoom = st.columns([2, 1])
     with col_tf:
-        selected_timeframe = st.selectbox("Choisissez l'unité de temps (Focus 36h)", list(TIMEFRAME_MAPPING.keys()))
+        selected_timeframe = st.selectbox("Choisissez l'unité de temps", list(TIMEFRAME_MAPPING.keys()))
+    with col_zoom:
+        zoom_36h_option = st.checkbox("🔍 Zoom graphique 36h", value=True, help="Affiche uniquement les dernières 36 heures sur le graphique pour plus de précision.")
     
     st.markdown("")
     run_analysis = st.button("🚀 Lancer l'analyse", type="primary", use_container_width=True)
@@ -430,7 +443,7 @@ if st.session_state.active_tab == "new":
     if run_analysis:
         tf_info = TIMEFRAME_MAPPING[selected_timeframe]
         
-        with st.spinner(f"Chargement ultra-rapide des dernières 36h pour {selected_asset_name}..."):
+        with st.spinner(f"Chargement des données pour {selected_asset_name} ({selected_timeframe})..."):
             df = load_market_data(ticker_symbol, tf_info["period"], tf_info["interval"])
             recent_news_list = get_recent_news(ticker_symbol)
             news_text = "\n".join(recent_news_list)
@@ -438,7 +451,7 @@ if st.session_state.active_tab == "new":
             if df.empty or 'Close' not in df.columns:
                 st.error(f"Erreur : Impossible de récupérer les données pour `{ticker_symbol}`. Vérifiez que le code ISIN ou le ticker est valide.")
             else:
-                df['MM50'] = df['Close'].rolling(window=10).mean()
+                df['MM50'] = df['Close'].rolling(window=50 if len(df) >= 50 else 10).mean()
                 
                 delta = df['Close'].diff()
                 gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
@@ -473,11 +486,11 @@ if st.session_state.active_tab == "new":
 
                 prompt = f"""
                 Tu es un système expert en trading quantitatif et analyse macroéconomique / fondamentale.
-                Analyse l'actif **{selected_asset_name} ({ticker_symbol})** sur la session récente (zoom 36h).
+                Analyse l'actif **{selected_asset_name} ({ticker_symbol})** en unité de temps **{selected_timeframe}**.
 
                 ### DONNÉES TECHNIQUES :
                 - Prix actuel : {current_price:.2f}
-                - MM (courte) = {mm50:.2f}
+                - MM = {mm50:.2f}
                 - RSI (14) = {rsi:.2f}
                 - MACD Line = {macd_line:.3f} | Signal = {macd_signal:.3f}
                 - **POINTS DE PIVOT FIBONACCI :**
@@ -494,13 +507,13 @@ if st.session_state.active_tab == "new":
 
                 ### 1. 📰 ANALYSE FONDAMENTALE ET ACTUALITÉS
                 - Synthèse des dernières actualités majeures affectant l'actif.
-                - Impact fondamental sur le prix à court terme (Haussier, Baisse, Neutre).
+                - Impact fondamental sur le prix à court/moyen terme (Haussier, Baisse, Neutre).
 
                 ---
 
-                ### 2. 📊 SYNTHÈSE TENDANCE TECHNIQUE ET PIVOTS FIBONACCI (36h)
+                ### 2. 📊 SYNTHÈSE TENDANCE TECHNIQUE ET PIVOTS FIBONACCI ({selected_timeframe})
                 - Position actuelle du prix par rapport au Pivot Central, S1/S2 et R1/R2.
-                - Analyse dynamique sur les dernières 36 heures.
+                - Analyse croisée avec les indicateurs techniques.
 
                 ---
 
@@ -510,7 +523,7 @@ if st.session_state.active_tab == "new":
 
                 ---
 
-                ### 🟢 SCÉNARIO D'ACHAT (BUY / LONG) - 36h
+                ### 🟢 SCÉNARIO D'ACHAT (BUY / LONG) - {selected_timeframe}
                 - Point d'entrée recommandé : {current_price:.2f}
                 - Stop Loss : {s1:.2f}
                 - Take Profit 1 : {r1:.2f}
@@ -520,7 +533,7 @@ if st.session_state.active_tab == "new":
 
                 ---
 
-                ### 🔴 SCÉNARIO DE VENTE (SELL / SHORT) - 36h
+                ### 🔴 SCÉNARIO DE VENTE (SELL / SHORT) - {selected_timeframe}
                 - Point d'entrée recommandé : {current_price:.2f}
                 - Stop Loss : {r1:.2f}
                 - Take Profit 1 : {s1:.2f}
@@ -547,6 +560,7 @@ if st.session_state.active_tab == "new":
                     "pivot": pivot,
                     "r1": r1, "r2": r2, "s1": s1, "s2": s2,
                     "news": recent_news_list,
+                    "zoom_36h": zoom_36h_option,
                     "executed": False,
                     "result": "En cours / Indéterminé"
                 }
@@ -569,10 +583,11 @@ else:
         
         df = entry['df']
         pivot, r1, r2, s1, s2 = entry['pivot'], entry['r1'], entry['r2'], entry['s1'], entry['s2']
+        zoom_setting = entry.get('zoom_36h', True)
 
-        # GRAPHIQUE UNIQUE : Zoom 36h avec tous les pivots Fibonacci
+        # GRAPHIQUE UNIQUE : Unités de temps conservées avec zoom 36h optionnel et pivots Fibonacci complets
         st.markdown("---")
-        fig_global = draw_global_chart(df, pivot, r1, r2, s1, s2, entry['asset'], entry['tf'])
+        fig_global = draw_global_chart(df, pivot, r1, r2, s1, s2, entry['asset'], entry['tf'], zoom_36h=zoom_setting)
         st.pyplot(fig_global)
         plt.close(fig_global)
 
