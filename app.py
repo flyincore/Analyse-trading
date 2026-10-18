@@ -504,6 +504,12 @@ if st.session_state.active_tab == "new":
 
                 ---
 
+                ### 3. ⭐ SCÉNARIO À PRIVILÉGIER ET RAISONNEMENT
+                - Indique clairement le scénario à privilégier entre l'Achat (LONG) et la Vente (SHORT).
+                - Explique l'analyse croisée (fondamentale + technique + pivots) qui a poussé à ce raisonnement stratégique.
+
+                ---
+
                 ### 🟢 SCÉNARIO D'ACHAT (BUY / LONG) - {selected_timeframe}
                 - Point d'entrée recommandé : {current_price:.2f}
                 - Stop Loss : {s1:.2f}
