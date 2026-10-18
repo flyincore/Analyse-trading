@@ -11,13 +11,14 @@ st.title("🎯 Bot d'Analyse Technique & Fondamentale Multi-Actifs")
 st.markdown("Combinez l'analyse technique (indicateurs, pivots, graphique) et l'analyse fondamentale (actualités récentes) pour une prise de décision optimale.")
 
 # ---------------------------------------------------------
-# Configuration de la clé API & Diagnostic IA
+# Configuration de la clé API & Modèle IA officiel
 # ---------------------------------------------------------
 API_KEY = "AQ.Ab8RN6KvFijAko4RVnTWf9Uf3qE4lVbXgrMsTXay1utBmqq5-w"
 genai.configure(api_key=API_KEY)
 
 def generate_ai_report(prompt_text):
-    models_to_try = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-pro']
+    # Utilisation du modèle exact demandé par l'API Google
+    models_to_try = ['gemini-3.8-flash', 'gemini-1.5-flash', 'gemini-pro']
     error_details = []
     
     for m_name in models_to_try:
@@ -29,7 +30,6 @@ def generate_ai_report(prompt_text):
         except Exception as e:
             error_details.append(f"Modèle `{m_name}` : {e}")
             
-    # Si tous échouent, on retourne les détails précis pour comprendre
     return "### ⚠️ Erreur détaillée de l'API Gemini :\n\n" + "\n\n".join(error_details)
 
 # ---------------------------------------------------------
