@@ -270,4 +270,12 @@ if selected_timeframe:
             - **Point d'entrée recommandé :** [Prix exact ex: 108.50]
             - **Stop Loss (SL) :** [Prix exact ex: 110.10]
             - **Take Profit 1 (TP1) :** [Prix exact ex: 106.00]
-            -
+            - **Take Profit 2 (TP2) :** [Prix exact ex: 104.00]
+            - **Ratio Risque / Récompense (R/R) :** [ex: 1:2.5]
+            - **Justification :** [Raison technique + alignment fondamental]
+            """
+
+            with st.spinner("Génération de l'analyse globale (Technique + Fondamentale)..."):
+                ai_text = generate_ai_report(prompt)
+
+            # --- CONSTRUCTION DU GRAPHIQUE EN CHANDEL
