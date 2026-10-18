@@ -3,7 +3,7 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import google.generativeai as genai
-import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 import re
 from datetime import datetime, timedelta
 
@@ -35,7 +35,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("🎯 Bot d'Analyse Trading Technique & Fondamental")
-st.markdown("Analyse technique complète, graphique avec zoom optionnel 36h, pivots Fibonacci, journal de trading et gestion de l'historique.")
+st.markdown("Analyse technique complète, graphique interactif Plotly (Zoom & Déplacement), pivots Fibonacci et journal de trading.")
 
 # ---------------------------------------------------------
 # Liste des clés API Gemini (Système de rotation / Fallback)
@@ -299,76 +299,64 @@ def get_recent_news(ticker_str):
         return ["Impossible de récupérer les actualités récentes pour cet actif."]
 
 # ---------------------------------------------------------
-# Graphique technique avec texture carbone / sombre pro
+# Graphique interactif Plotly (Zoom, Pan, Mobile & PC)
 # ---------------------------------------------------------
-def draw_global_chart(df, pivot, r1, r2, s1, s2, asset_name, timeframe, zoom_36h=False):
+def draw_interactive_chart(df, pivot, r1, r2, s1, s2, asset_name, timeframe, zoom_36h=False):
     df_plot = df.copy()
     if zoom_36h and timeframe in ["M15", "H1", "H4"]:
         if isinstance(df_plot.index, pd.DatetimeIndex) and len(df_plot) > 0:
             cutoff_time = df_plot.index[-1] - timedelta(hours=36)
             df_plot = df_plot[df_plot.index >= cutoff_time]
 
-    fig, ax = plt.subplots(figsize=(13, 7.5))
-    
-    # Style de fond effet carbone / anthracite moderne
-    fig.patch.set_facecolor('#181b22')
-    ax.set_facecolor('#12141a')
-    
     df_reset = df_plot.reset_index()
-    x = df_reset.index.values
-    opens = df_reset['Open'].values
-    highs = df_reset['High'].values
-    lows = df_reset['Low'].values
-    closes = df_reset['Close'].values
-    
-    up = closes >= opens
-    down = closes < opens
-
-    up_color = '#00c853'
-    down_color = '#ff5252'
-
-    ax.vlines(x[up], lows[up], highs[up], color=up_color, linewidth=1.4)
-    ax.vlines(x[down], lows[down], highs[down], color=down_color, linewidth=1.4)
-
-    body_bottom = np.minimum(opens, closes)
-    body_height = np.abs(closes - opens)
-    body_height[body_height == 0] = 0.01
-
-    ax.bar(x[up], body_height[up], bottom=body_bottom[up], color=up_color, width=0.7)
-    ax.bar(x[down], body_height[down], bottom=body_bottom[down], color=down_color, width=0.7)
-
-    if 'MM50' in df_reset.columns and df_reset['MM50'].notna().any():
-        ax.plot(x, df_reset['MM50'], label='MM 50', color='#ffab40', linewidth=1.8)
-
-    if pivot > 0:
-        ax.axhline(y=pivot, color='#ffd700', linestyle='--', linewidth=1.5, alpha=0.9, label=f'Pivot Central: {pivot:.2f}')
-        ax.axhline(y=r1, color='#ff8a80', linestyle=':', linewidth=1.4, alpha=0.8, label=f'R1 (Fib 38.2%): {r1:.2f}')
-        ax.axhline(y=r2, color='#ff5252', linestyle='-.', linewidth=1.4, alpha=0.8, label=f'R2 (Fib 61.8%): {r2:.2f}')
-        ax.axhline(y=s1, color='#b9f6ca', linestyle=':', linewidth=1.4, alpha=0.8, label=f'S1 (Fib 38.2%): {s1:.2f}')
-        ax.axhline(y=s2, color='#00c853', linestyle='-.', linewidth=1.4, alpha=0.8, label=f'S2 (Fib 61.8%): {s2:.2f}')
-
-    n_ticks = min(8, len(df_reset))
-    step = max(1, len(df_reset) // n_ticks) if n_ticks > 0 else 1
-    tick_indices = list(range(0, len(df_reset), step))
     date_col = 'Datetime' if 'Datetime' in df_reset.columns else 'Date'
-    tick_labels = [str(df_reset.iloc[i][date_col]).split()[-1] if 'Datetime' in df_reset.columns else str(df_reset.iloc[i][date_col]).split()[0] for i in tick_indices]
-    
-    ax.set_xticks(tick_indices)
-    ax.set_xticklabels(tick_labels, rotation=25, fontsize=11, color='#cfd8dc')
 
-    ax.tick_params(colors='#cfd8dc', labelsize=11)
-    ax.xaxis.label.set_color('#cfd8dc')
-    ax.yaxis.label.set_color('#cfd8dc')
-    ax.title.set_color('#ffffff')
-    for spine in ax.spines.values():
-        spine.set_edgecolor('#37474f')
+    fig = go.Figure()
+
+    # Ajout des bougies japonaises (Candlestick)
+    fig.add_trace(go.Candlestick(
+        x=df_reset[date_col],
+        open=df_reset['Open'],
+        high=df_reset['High'],
+        low=df_reset['Low'],
+        close=df_reset['Close'],
+        name='Prix',
+        increasing_line_color='#00c853',
+        decreasing_line_color='#ff5252'
+    ))
+
+    # Moyenne Mobile MM50
+    if 'MM50' in df_reset.columns and df_reset['MM50'].notna().any():
+        fig.add_trace(go.Scatter(
+            x=df_reset[date_col],
+            y=df_reset['MM50'],
+            mode='lines',
+            name='MM 50',
+            line=dict(color='#ffab40', width=1.5)
+        ))
+
+    # Niveaux de Pivots Fibonacci
+    if pivot > 0:
+        fig.add_hline(y=pivot, line_dash="dash", line_color="#ffd700", annotation_text=f"Pivot: {pivot:.2f}", annotation_position="top left")
+        fig.add_hline(y=r1, line_dash="dot", line_color="#ff8a80", annotation_text=f"R1: {r1:.2f}", annotation_position="top left")
+        fig.add_hline(y=r2, line_dash="dashdot", line_color="#ff5252", annotation_text=f"R2: {r2:.2f}", annotation_position="top left")
+        fig.add_hline(y=s1, line_dash="dot", line_color="#b9f6ca", annotation_text=f"S1: {s1:.2f}", annotation_position="bottom left")
+        fig.add_hline(y=s2, line_dash="dashdot", line_color="#00c853", annotation_text=f"S2: {s2:.2f}", annotation_position="bottom left")
 
     zoom_label = " (Zoom Dernières 36h)" if zoom_36h and timeframe in ["M15", "H1", "H4"] else ""
-    ax.set_title(f"📈 Vue Technique & Pivots Fibonacci — {asset_name} ({timeframe}){zoom_label}", fontsize=15, fontweight='bold', pad=15)
-    ax.legend(loc='upper left', facecolor='#1e222d', edgecolor='#37474f', labelcolor='#ffffff', fontsize=10)
-    ax.grid(True, linestyle=':', alpha=0.35, color='#37474f')
+    
+    fig.update_layout(
+        title=f"📈 Graphique Interactif — {asset_name} ({timeframe}){zoom_label}",
+        xaxis_title="Date / Heure",
+        yaxis_title="Prix",
+        template="plotly_dark",
+        paper_bgcolor="#12141a",
+        plot_bgcolor="#181b22",
+        height=600,
+        xaxis_rangeslider_visible=False,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    )
 
-    plt.tight_layout()
     return fig
 
 # Initialisation des états de session
@@ -458,7 +446,7 @@ if st.session_state.active_tab == "new":
     with col_tf:
         selected_timeframe = st.selectbox("Choisissez l'unité de temps", list(TIMEFRAME_MAPPING.keys()))
     with col_zoom:
-        zoom_36h_option = st.checkbox("🔍 Zoom graphique 36h", value=True, help="Affiche uniquement les dernières 36 heures sur le graphique pour plus de précision.")
+        zoom_36h_option = st.checkbox("🔍 Zoom graphique 36h", value=True, help="Affiche par défaut les dernières 36 heures sur le graphique.")
     
     st.markdown("")
     run_analysis = st.button("🚀 Lancer l'analyse", type="primary", use_container_width=True)
@@ -609,9 +597,9 @@ else:
         zoom_setting = entry.get('zoom_36h', True)
 
         st.markdown("---")
-        fig_global = draw_global_chart(df, pivot, r1, r2, s1, s2, entry['asset'], entry['tf'], zoom_36h=zoom_setting)
-        st.pyplot(fig_global)
-        plt.close(fig_global)
+        # Affichage du graphique interactif Plotly
+        fig_interactive = draw_interactive_chart(df, pivot, r1, r2, s1, s2, entry['asset'], entry['tf'], zoom_36h=zoom_setting)
+        st.plotly_chart(fig_interactive, use_container_width=True)
 
         st.markdown("---")
         with st.expander("📰 Voir les flux d'actualités capturés lors de l'analyse", expanded=False):
