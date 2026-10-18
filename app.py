@@ -4,13 +4,14 @@ import pandas as pd
 import numpy as np
 import google.generativeai as genai
 import matplotlib.pyplot as plt
+import re
 from datetime import datetime
 
 # Configuration de la page Streamlit
 st.set_page_config(page_title="Bot Trading IA - Mondial & ISIN", layout="wide")
 
 st.title("🎯 Bot d'Analyse Trading Technique & Fondamental")
-st.markdown("Analyse technique (chandelles, indicateurs, pivots Fibonacci) et fondamentale (actualités en direct) avec journal de trading et gestion de l'historique.")
+st.markdown("Analyse technique (chandelles, indicateurs, pivots Fibonacci) et fondamentale (actualités en direct) avec visuels de trades, journal et gestion de l'historique.")
 
 # ---------------------------------------------------------
 # Liste des clés API Gemini (Système de rotation / Fallback)
@@ -123,11 +124,87 @@ def get_recent_news(ticker_str):
     except Exception:
         return ["Impossible de récupérer les actualités récentes pour cet actif."]
 
+# ---------------------------------------------------------
+# Fonction d'extraction des niveaux de trade & Générateur de graphique visuel
+# ---------------------------------------------------------
+def extract_trade_levels(ai_text, scenario_type):
+    try:
+        if "ACHAT" in scenario_type:
+            parts = ai_text.split("SCÉNARIO D'ACHAT")
+            if len(parts) > 1:
+                section = parts[1].split("SCÉNARIO DE VENTE")[0]
+            else:
+                return None, None, None, None
+        else:
+            parts = ai_text.split("SCÉNARIO DE VENTE")
+            if len(parts) > 1:
+                section = parts[1]
+            else:
+                return None, None, None, None
+        
+        entry_match = re.search(r'd\'entrée[^:]*:\s*([0-9\.]+)', section, re.IGNORECASE)
+        sl_match = re.search(r'Stop Loss[^:]*:\s*([0-9\.]+)', section, re.IGNORECASE)
+        tp1_match = re.search(r'Take Profit 1[^:]*:\s*([0-9\.]+)', section, re.IGNORECASE)
+        tp2_match = re.search(r'Take Profit 2[^:]*:\s*([0-9\.]+)', section, re.IGNORECASE)
+        
+        entry = float(entry_match.group(1)) if entry_match else None
+        sl = float(sl_match.group(1)) if sl_match else None
+        tp1 = float(tp1_match.group(1)) if tp1_match else None
+        tp2 = float(tp2_match.group(1)) if tp2_match else None
+        return entry, sl, tp1, tp2
+    except Exception:
+        return None, None, None, None
+
+def draw_trade_setup_chart(entry, sl, tp1, tp2, is_buy=True):
+    if not entry or not sl or not tp1:
+        return None
+    
+    fig, ax = plt.subplots(figsize=(7, 3))
+    fig.patch.set_facecolor('#0e1117')
+    ax.set_facecolor('#0e1117')
+    
+    all_vals = [entry, sl, tp1]
+    if tp2: all_vals.append(tp2)
+    min_p, max_p = min(all_vals), max(all_vals)
+    margin = (max_p - min_p) * 0.25 if max_p != min_p else entry * 0.01
+    
+    ax.set_ylim(min_p - margin, max_p + margin)
+    ax.set_xlim(0, 1)
+    ax.axis('off')
+    
+    if is_buy:
+        # Zone de Gain (Entrée -> TP) en Vert Pâle
+        ax.axhspan(entry, tp2 if tp2 else tp1, color='#a8e6cf', alpha=0.35, label='Zone de Gain (TP)')
+        # Zone de Risque (SL -> Entrée) en Rouge Pâle
+        ax.axhspan(sl, entry, color='#ffb3ba', alpha=0.35, label='Zone de Risque (SL)')
+    else:
+        # Pour Vente, profit vers le bas (TP -> Entrée) en Vert Pâle
+        ax.axhspan(tp2 if tp2 else tp1, entry, color='#a8e6cf', alpha=0.35, label='Zone de Gain (TP)')
+        # Risque vers le haut (Entrée -> SL) en Rouge Pâle
+        ax.axhspan(entry, sl, color='#ffb3ba', alpha=0.35, label='Zone de Risque (SL)')
+        
+    # Lignes des niveaux
+    ax.axhline(entry, color='white', linestyle='-', linewidth=1.8)
+    ax.text(0.5, entry, f'  Entrée: {entry}  ', color='white', fontweight='bold', ha='center', va='center', fontsize=10, bbox=dict(facecolor='#262730', edgecolor='white', alpha=0.8, boxstyle='round,pad=0.3'))
+    
+    ax.axhline(sl, color='#ef5350', linestyle='--', linewidth=1.3)
+    ax.text(0.5, sl, f'  Stop Loss (SL): {sl}  ', color='#ef5350', fontweight='bold', ha='center', va='center', fontsize=9, bbox=dict(facecolor='#262730', edgecolor='#ef5350', alpha=0.8, boxstyle='round,pad=0.3'))
+    
+    ax.axhline(tp1, color='#26a69a', linestyle='--', linewidth=1.3)
+    ax.text(0.5, tp1, f'  Take Profit 1 (TP1): {tp1}  ', color='#26a69a', fontweight='bold', ha='center', va='center', fontsize=9, bbox=dict(facecolor='#262730', edgecolor='#26a69a', alpha=0.8, boxstyle='round,pad=0.3'))
+    
+    if tp2:
+        ax.axhline(tp2, color='#26a69a', linestyle=':', linewidth=1.3)
+        ax.text(0.5, tp2, f'  Take Profit 2 (TP2): {tp2}  ', color='#26a69a', fontweight='bold', ha='center', va='center', fontsize=9, bbox=dict(facecolor='#262730', edgecolor='#26a69a', alpha=0.8, boxstyle='round,pad=0.3'))
+
+    plt.tight_layout()
+    return fig
+
 # Initialisation des états de session
 if "trade_history" not in st.session_state:
     st.session_state.trade_history = []
 if "active_tab" not in st.session_state:
-    st.session_state.active_tab = "new"  # "new" ou ID d'une analyse archivée
+    st.session_state.active_tab = "new"
 
 # ---------------------------------------------------------
 # Barre latérale : Sélection globale & Historique
@@ -179,7 +256,6 @@ if st.session_state.trade_history:
             st.session_state.active_tab = selected_id
             st.rerun()
 
-    # --- Bloc de suppression d'éléments de l'historique ---
     with st.sidebar.expander("🗑️ Gérer / Supprimer l'historique"):
         all_labels = [f"{item['id']} | {item['timestamp']} - {item['asset']} ({item['tf']})" for item in st.session_state.trade_history]
         to_delete_labels = st.multiselect("Sélectionner à supprimer :", all_labels)
@@ -432,6 +508,30 @@ else:
         st.markdown("---")
         st.markdown("### 📊 Rapport d'Analyse Global")
         st.markdown(entry['report'])
+
+        # --- Affichage des graphiques visuels de trade (Achat & Vente) ---
+        st.markdown("---")
+        st.markdown("### 📈 Visualisation Graphique des Scénarios de Trade")
+        
+        buy_entry, buy_sl, buy_tp1, buy_tp2 = extract_trade_levels(entry['report'], "ACHAT")
+        sell_entry, sell_sl, sell_tp1, sell_tp2 = extract_trade_levels(entry['report'], "VENTE")
+        
+        col_vis1, col_vis2 = st.columns(2)
+        with col_vis1:
+            st.markdown("#### 🟢 Visuel du Scénario d'Achat")
+            fig_buy_setup = draw_trade_setup_chart(buy_entry, buy_sl, buy_tp1, buy_tp2, is_buy=True)
+            if fig_buy_setup:
+                st.pyplot(fig_buy_setup)
+            else:
+                st.info("Niveaux d'achat non détectés pour ce visuel.")
+                
+        with col_vis2:
+            st.markdown("#### 🔴 Visuel du Scénario de Vente")
+            fig_sell_setup = draw_trade_setup_chart(sell_entry, sell_sl, sell_tp1, sell_tp2, is_buy=False)
+            if fig_sell_setup:
+                st.pyplot(fig_sell_setup)
+            else:
+                st.info("Niveaux de vente non détectés pour ce visuel.")
 
         # --- Suivi du trade ---
         st.markdown("---")
