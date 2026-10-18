@@ -5,10 +5,10 @@ import google.generativeai as genai
 import matplotlib.pyplot as plt
 
 # Configuration de la page Streamlit
-st.set_page_config(page_title="Bot Trading IA - Mondial", layout="wide")
+st.set_page_config(page_title="Bot Trading IA - Mondial & ISIN", layout="wide")
 
-st.title("🎯 Bot d'Analyse Trading Technique & Fondamental (Mondial)")
-st.markdown("Analyse technique (chandelles, indicateurs, pivots) et fondamentale (actualités en direct) sur toutes les actions US, Europe, Asie et cryptos.")
+st.title("🎯 Bot d'Analyse Trading Technique & Fondamental")
+st.markdown("Analyse technique (chandelles, indicateurs, pivots) et fondamentale (actualités en direct) avec recherche par Ticker, ISIN ou Catégories.")
 
 # ---------------------------------------------------------
 # Configuration de la clé API & Modèle IA officiel
@@ -43,11 +43,7 @@ ASSETS_DICTIONARY = {
         "Alphabet (Google)": "GOOGL",
         "Meta (Facebook)": "META",
         "Tesla": "TSLA",
-        "AMD": "AMD",
-        "Berkshire Hathaway": "BRK-B",
-        "Eli Lilly": "LLY",
-        "Broadcom": "AVGO",
-        "JPMorgan Chase": "JPM"
+        "AMD": "AMD"
     },
     "🇪🇺 Actions Europe (Euronext, DAX, LSE)": {
         "TotalEnergies (France)": "TTE.PA",
@@ -56,55 +52,35 @@ ASSETS_DICTIONARY = {
         "SAP (Allemagne)": "SAP.DE",
         "Siemens (Allemagne)": "SIE.DE",
         "Sanofi (France)": "SAN.PA",
-        "Schneider Electric (France)": "SU.PA",
-        "Airbus (France/DE)": "AIR.PA",
-        "Shell (UK/NL)": "SHEL.L",
-        "Novo Nordisk (Danemark)": "NOVO-B.CO",
-        "Ferrari (Italie)": "RACE.MI"
+        "Airbus (France/DE)": "AIR.PA"
     },
     "🌏 Actions Asie & Pacifique": {
         "TSMC (Taïwan - ADR US)": "TSM",
         "Toyota (Japon)": "7203.T",
         "Sony (Japon)": "6758.T",
-        "SoftBank (Japon)": "9984.T",
         "Tencent (Hong Kong)": "0700.HK",
-        "Alibaba (Hong Kong)": "9988.HK",
-        "Samsung Electronics (Corée)": "005930.KS",
-        "Reliance Industries (Inde)": "RELIANCE.NS",
-        "BHP Group (Australie)": "BHP.AX"
+        "Alibaba (Hong Kong)": "9988.HK"
     },
     "📊 Indices Boursiers": {
         "S&P 500 (USA)": "^GSPC",
         "Nasdaq 100 (USA)": "^IXIC",
-        "Dow Jones (USA)": "^DJI",
         "CAC 40 (France)": "^FCHI",
-        "DAX 40 (Allemagne)": "^GDAXI",
-        "FTSE 100 (Royaume-Uni)": "^FTSE",
-        "Nikkei 225 (Japon)": "^N225",
-        "Hang Seng (Hong Kong)": "^HSI"
+        "DAX 40 (Allemagne)": "^GDAXI"
     },
     "🛢️ Matières Premières": {
         "Pétrole Brent": "BZ=F",
-        "Pétrole WTI": "CL=F",
         "Or (Gold)": "GC=F",
-        "Argent (Silver)": "SI=F",
-        "Gaz Naturel": "NG=F",
-        "Cuivre": "HG=F"
+        "Argent (Silver)": "SI=F"
     },
     "💱 Forex (Devises)": {
         "EUR/USD": "EURUSD=X",
         "GBP/USD": "GBPUSD=X",
-        "USD/JPY": "USDJPY=X",
-        "AUD/USD": "AUDUSD=X",
-        "USD/CAD": "USDCAD=X",
-        "EUR/GBP": "EURGBP=X"
+        "USD/JPY": "USDJPY=X"
     },
     "🪙 Cryptomonnaies": {
         "Bitcoin (BTC/USD)": "BTC-USD",
         "Ethereum (ETH/USD)": "ETH-USD",
-        "Solana (SOL-USD)": "SOL-USD",
-        "Ripple (XRP-USD)": "XRP-USD",
-        "Binance Coin (BNB-USD)": "BNB-USD"
+        "Solana (SOL-USD)": "SOL-USD"
     }
 }
 
@@ -132,32 +108,26 @@ def get_recent_news(ticker_str):
         return ["Impossible de récupérer les actualités récentes pour cet actif."]
 
 # ---------------------------------------------------------
-# Barre latérale : Sélection globale
+# Barre latérale : Sélection globale (Ticker / ISIN / Menu)
 # ---------------------------------------------------------
 st.sidebar.header("1. Sélection de l'Actif")
 
-custom_ticker_input = st.sidebar.text_input("🔍 Ticker libre (ex: BABA, 7203.T, TTE.PA...)", "").strip()
+custom_ticker_input = st.sidebar.text_input("🔍 Ticker libre (ex: AAPL, TSLA...)", "").strip()
+custom_isin_input = st.sidebar.text_input("🔍 Ou code ISIN (ex: FR0000120271)", "").strip()
 
 if custom_ticker_input:
     ticker_symbol = custom_ticker_input.upper()
     selected_asset_name = custom_ticker_input.upper()
-    st.sidebar.info(f"Ticker personnalisé actif : `{ticker_symbol}`")
+    st.sidebar.info(f"Ticker actif : `{ticker_symbol}`")
+elif custom_isin_input:
+    ticker_symbol = custom_isin_input.upper()
+    selected_asset_name = f"ISIN: {ticker_symbol}"
+    st.sidebar.info(f"Code ISIN actif : `{ticker_symbol}`")
 else:
     selected_category = st.sidebar.selectbox("Sélectionnez la Catégorie", list(ASSETS_DICTIONARY.keys()))
     selected_asset_name = st.sidebar.selectbox("Sélectionnez l'Actif", list(ASSETS_DICTIONARY[selected_category].keys()))
     ticker_symbol = ASSETS_DICTIONARY[selected_category][selected_asset_name]
     st.sidebar.markdown(f"**Ticker Yahoo Finance :** `{ticker_symbol}`")
-
-with st.sidebar.expander("ℹ️ Suffixes boursiers mondiaux"):
-    st.markdown("""
-    Pour chercher n'importe quelle action mondiale, ajoutez son extension :
-    * **France :** `.PA` (ex: `AIR.PA`)
-    * **Allemagne :** `.DE` (ex: `BMW.DE`)
-    * **Londres :** `.L` (ex: `BP.L`)
-    * **Japon :** `.T` (ex: `7203.T`)
-    * **Hong Kong :** `.HK` (ex: `0700.HK`)
-    * **USA :** Pas de suffixe (ex: `NVDA`)
-    """)
 
 st.sidebar.success("🔑 Clé API pré-configurée avec succès !")
 
@@ -190,7 +160,7 @@ if selected_timeframe:
         news_text = "\n".join(recent_news_list)
 
         if df.empty or 'Close' not in df.columns:
-            st.error(f"Erreur : Impossible de récupérer les données pour `{ticker_symbol}`. Vérifiez la valeur ou le suffixe boursier (ex: `.PA`, `.DE`, `.T`).")
+            st.error(f"Erreur : Impossible de récupérer les données pour `{ticker_symbol}`. Vérifiez que le code ISIN ou le ticker est valide.")
         else:
             df['MM50'] = df['Close'].rolling(window=50).mean()
             df['MM100'] = df['Close'].rolling(window=100).mean()
@@ -332,15 +302,4 @@ if selected_timeframe:
             ax.legend(loc='upper left', facecolor='#262730', edgecolor='none', labelcolor='white')
             ax.grid(True, linestyle=':', alpha=0.3, color='gray')
 
-            # --- AFFICHAGE STREAMLIT ---
-            st.markdown("---")
-            
-            with st.expander("📰 Voir les flux d'actualités récents capturés", expanded=False):
-                for headline in recent_news_list:
-                    st.write(headline)
-
-            st.pyplot(fig)
-
-            st.markdown("---")
-            st.markdown("### 📊 Rapport d'Analyse Global")
-            st.markdown(ai_text)
+            # --- AFFICHAGE STREAMLIT
