@@ -35,7 +35,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("🎯 Bot d'Analyse Trading Technique & Fondamental")
-st.markdown("Analyse technique complète, graphique interactif Plotly avec flèches de retournement, pivots Fibonacci et journal de trading.")
+st.markdown("Analyse technique complète, graphique interactif Plotly avec flèches de retournement, pivots Fibonacci et enregistrement optionnel.")
 
 # ---------------------------------------------------------
 # Liste des clés API Gemini (Système de rotation / Fallback)
@@ -311,7 +311,6 @@ def draw_interactive_chart(df, pivot, r1, r2, s1, s2, asset_name, timeframe, zoo
     df_reset = df_plot.reset_index()
     date_col = 'Datetime' if 'Datetime' in df_reset.columns else 'Date'
 
-    # Détection algorithmique des zones de retournement
     reversal_bull_x = []
     reversal_bull_y = []
     reversal_bear_x = []
@@ -325,19 +324,16 @@ def draw_interactive_chart(df, pivot, r1, r2, s1, s2, asset_name, timeframe, zoo
         curr_low = df_reset.loc[i, 'Low']
         curr_high = df_reset.loc[i, 'High']
 
-        # Retournement haussier
         if (prev_close < prev_open) and (curr_close > curr_open) and (curr_close >= prev_open):
             reversal_bull_x.append(df_reset.loc[i, date_col])
             reversal_bull_y.append(curr_low * 0.995)
 
-        # Retournement baissier
         elif (prev_close > prev_open) and (curr_close < curr_open) and (curr_close <= prev_open):
             reversal_bear_x.append(df_reset.loc[i, date_col])
             reversal_bear_y.append(curr_high * 1.005)
 
     fig = go.Figure()
 
-    # Bougies japonaises pleines
     fig.add_trace(go.Candlestick(
         x=df_reset[date_col],
         open=df_reset['Open'],
@@ -349,7 +345,6 @@ def draw_interactive_chart(df, pivot, r1, r2, s1, s2, asset_name, timeframe, zoo
         decreasing=dict(line=dict(color='#ff5252', width=1), fillcolor='#ff5252')
     ))
 
-    # Flèches de retournement haussier (Vertes vers le haut)
     if reversal_bull_x:
         fig.add_trace(go.Scatter(
             x=reversal_bull_x,
@@ -359,7 +354,6 @@ def draw_interactive_chart(df, pivot, r1, r2, s1, s2, asset_name, timeframe, zoo
             marker=dict(symbol='triangle-up', size=12, color='#00e676')
         ))
 
-    # Flèches de retournement baissier (Rouges vers le bas)
     if reversal_bear_x:
         fig.add_trace(go.Scatter(
             x=reversal_bear_x,
@@ -369,7 +363,6 @@ def draw_interactive_chart(df, pivot, r1, r2, s1, s2, asset_name, timeframe, zoo
             marker=dict(symbol='triangle-down', size=12, color='#ff1744')
         ))
 
-    # Moyenne Mobile MM50
     if 'MM50' in df_reset.columns and df_reset['MM50'].notna().any():
         fig.add_trace(go.Scatter(
             x=df_reset[date_col],
@@ -379,7 +372,6 @@ def draw_interactive_chart(df, pivot, r1, r2, s1, s2, asset_name, timeframe, zoo
             line=dict(color='#ffab40', width=1.5)
         ))
 
-    # Niveaux de Pivots Fibonacci
     if pivot > 0:
         fig.add_hline(y=pivot, line_dash="dash", line_color="#ffd700", annotation_text=f"Pivot: {pivot:.2f}", annotation_position="top left")
         fig.add_hline(y=r1, line_dash="dot", line_color="#ff8a80", annotation_text=f"R1: {r1:.2f}", annotation_position="top left")
@@ -408,6 +400,8 @@ if "trade_history" not in st.session_state:
     st.session_state.trade_history = []
 if "active_tab" not in st.session_state:
     st.session_state.active_tab = "new"
+if "current_analysis" not in st.session_state:
+    st.session_state.current_analysis = None
 
 # ---------------------------------------------------------
 # Barre latérale : Sélection globale & Historique
@@ -450,6 +444,7 @@ if st.session_state.trade_history:
     if selected_history == "-- Nouvelle Analyse --":
         if st.session_state.active_tab != "new":
             st.session_state.active_tab = "new"
+            st.session_state.current_analysis = None
             st.rerun()
     else:
         selected_id = int(selected_history.split(" | ")[0])
@@ -468,11 +463,13 @@ if st.session_state.trade_history:
                 st.session_state.trade_history = [item for item in st.session_state.trade_history if item['id'] not in ids_to_del]
                 if st.session_state.active_tab in ids_to_del:
                     st.session_state.active_tab = "new"
+                    st.session_state.current_analysis = None
                 st.rerun()
         with col_del2:
             if st.button("Tout supprimer", use_container_width=True):
                 st.session_state.trade_history = []
                 st.session_state.active_tab = "new"
+                st.session_state.current_analysis = None
                 st.rerun()
 
 else:
@@ -481,7 +478,7 @@ else:
         st.session_state.active_tab = "new"
 
 # ---------------------------------------------------------
-# Affichage Principal (Nouvelle Analyse ou Archive)
+# Affichage Principal (Nouvelle Analyse, Résultat en attente ou Archive)
 # ---------------------------------------------------------
 if st.session_state.active_tab == "new":
     st.subheader("2. Paramétrage & Lancement de l'Analyse")
@@ -601,10 +598,9 @@ if st.session_state.active_tab == "new":
                     ai_text = generate_ai_report(prompt)
 
                 timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-                new_id = (max([item['id'] for item in st.session_state.trade_history]) + 1) if st.session_state.trade_history else 1
                 
-                new_entry = {
-                    "id": new_id,
+                # Stockage temporaire en session avant enregistrement volontaire
+                st.session_state.current_analysis = {
                     "timestamp": timestamp_str,
                     "asset": selected_asset_name,
                     "ticker": ticker_symbol,
@@ -619,10 +615,41 @@ if st.session_state.active_tab == "new":
                     "executed": False,
                     "result": "En cours / Indéterminé"
                 }
-                
-                st.session_state.trade_history.append(new_entry)
+
+    # Si une analyse vient d'être générée mais pas encore enregistrée
+    if st.session_state.current_analysis is not None:
+        ca = st.session_state.current_analysis
+        st.markdown("---")
+        st.markdown(f"## 📈 Résultat de l'Analyse : {ca['asset']} ({ca['tf']}) — {ca['timestamp']}")
+        st.markdown(f"**Ticker :** `{ca['ticker']}` | **Prix actuel :** {ca['price']:.2f}")
+
+        fig_interactive = draw_interactive_chart(ca['df'], ca['pivot'], ca['r1'], ca['r2'], ca['s1'], ca['s2'], ca['asset'], ca['tf'], zoom_36h=ca['zoom_36h'])
+        st.plotly_chart(fig_interactive, use_container_width=True)
+
+        st.markdown("---")
+        with st.expander("📰 Voir les flux d'actualités capturés", expanded=False):
+            for headline in ca['news']:
+                st.write(headline)
+
+        st.markdown("---")
+        st.markdown("### 📊 Rapport d'Analyse Global")
+        st.markdown(ca['report'])
+
+        st.markdown("---")
+        # Bouton d'enregistrement optionnel
+        col_save1, col_save2 = st.columns([1, 2])
+        with col_save1:
+            if st.button("💾 Enregistrer cette analyse dans l'historique", type="primary", use_container_width=True):
+                new_id = (max([item['id'] for item in st.session_state.trade_history]) + 1) if st.session_state.trade_history else 1
+                ca_to_save = ca.copy()
+                ca_to_save['id'] = new_id
+                st.session_state.trade_history.append(ca_to_save)
                 st.session_state.active_tab = new_id
+                st.session_state.current_analysis = None
+                st.success("Analyse enregistrée avec succès dans l'historique !")
                 st.rerun()
+        with col_save2:
+            st.info("💡 Cliquez sur le bouton ci-contre pour conserver cette analyse et accéder au suivi de position ainsi qu'au chat Gemini associé.")
 
 else:
     # Mode consultation d'une analyse de l'historique
@@ -631,6 +658,7 @@ else:
     if entry:
         if st.button("⬅️ Effectuer une nouvelle analyse"):
             st.session_state.active_tab = "new"
+            st.session_state.current_analysis = None
             st.rerun()
 
         st.markdown(f"## 📜 Analyse Archivée : {entry['asset']} ({entry['tf']}) — {entry['timestamp']}")
@@ -641,7 +669,6 @@ else:
         zoom_setting = entry.get('zoom_36h', True)
 
         st.markdown("---")
-        # Affichage du graphique interactif Plotly avec flèches de retournement
         fig_interactive = draw_interactive_chart(df, pivot, r1, r2, s1, s2, entry['asset'], entry['tf'], zoom_36h=zoom_setting)
         st.plotly_chart(fig_interactive, use_container_width=True)
 
@@ -727,4 +754,5 @@ else:
                     st.session_state[chat_key].append({"role": "assistant", "content": reply})
     else:
         st.session_state.active_tab = "new"
+        st.session_state.current_analysis = None
         st.rerun()
