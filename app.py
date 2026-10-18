@@ -123,9 +123,11 @@ def get_recent_news(ticker_str):
     except Exception:
         return ["Impossible de récupérer les actualités récentes pour cet actif."]
 
-# Initialisation du journal de trading en Session State
+# Initialisation des états de session
 if "trade_history" not in st.session_state:
     st.session_state.trade_history = []
+if "active_tab" not in st.session_state:
+    st.session_state.active_tab = "new"  # "new" ou ID d'une analyse archivée
 
 # ---------------------------------------------------------
 # Barre latérale : Sélection globale & Historique
@@ -151,68 +153,50 @@ else:
 
 st.sidebar.success(f"🔑 {len(API_KEYS)} clé(s) API configurée(s) !")
 
-# ---------------------------------------------------------
-# Menu Déroulant Historique des Requêtes (Journal de Trading)
-# ---------------------------------------------------------
+# --- Menu Historique ---
 st.sidebar.markdown("---")
 st.sidebar.header("📜 Historique des Requêtes")
 
 if st.session_state.trade_history:
-    options = [f"{item['id']} | {item['timestamp']} - {item['asset']} ({item['tf']})" for item in st.session_state.trade_history]
-    selected_history_item = st.sidebar.selectbox("Sélectionnez une analyse passée :", ["-- Nouvelles Analyses --"] + options)
+    history_options = ["-- Nouvelle Analyse --"] + [f"{item['id']} | {item['timestamp']} - {item['asset']} ({item['tf']})" for item in st.session_state.trade_history]
+    
+    current_index = 0
+    if st.session_state.active_tab != "new":
+        for idx, opt in enumerate(history_options[1:], start=1):
+            if opt.startswith(f"{st.session_state.active_tab} |"):
+                current_index = idx
+                break
+
+    selected_history = st.sidebar.selectbox("Consulter une analyse passée :", history_options, index=current_index)
+    
+    if selected_history == "-- Nouvelle Analyse --":
+        if st.session_state.active_tab != "new":
+            st.session_state.active_tab = "new"
+            st.rerun()
+    else:
+        selected_id = int(selected_history.split(" | ")[0])
+        if st.session_state.active_tab != selected_id:
+            st.session_state.active_tab = selected_id
+            st.rerun()
 else:
-    st.sidebar.info("Aucune analyse enregistrée pour le moment.")
-    selected_history_item = "-- Nouvelles Analyses --"
+    st.sidebar.info("Aucune analyse enregistrée.")
+    if st.session_state.active_tab != "new":
+        st.session_state.active_tab = "new"
 
 # ---------------------------------------------------------
-# Application Principale & Maintien de l'état
+# Affichage Principal (Nouvelle Analyse ou Archive)
 # ---------------------------------------------------------
-st.subheader("2. Choisissez l'unité de temps pour l'analyse")
-
-if "selected_timeframe" not in st.session_state:
-    st.session_state.selected_timeframe = None
-
-col1, col2, col3, col4, col5, col6, col7 = st.columns(7)
-if col1.button("⚡ M15", use_container_width=True):    st.session_state.selected_timeframe = "M15"
-if col2.button("⏱️ M30", use_container_width=True):    st.session_state.selected_timeframe = "M30"
-if col3.button("📊 H1", use_container_width=True):     st.session_state.selected_timeframe = "H1"
-if col4.button("📈 H4", use_container_width=True):     st.session_state.selected_timeframe = "H4"
-if col5.button("📅 D1", use_container_width=True):     st.session_state.selected_timeframe = "D1"
-if col6.button("🗓️ Mois", use_container_width=True):   st.session_state.selected_timeframe = "Mois"
-if col7.button("📈 Années", use_container_width=True): st.session_state.selected_timeframe = "Années"
-
-# Si un élément de l'historique est sélectionné
-if selected_history_item != "-- Nouvelles Analyses --":
-    selected_id = int(selected_history_item.split(" | ")[0])
-    entry = next(item for item in st.session_state.trade_history if item['id'] == selected_id)
+if st.session_state.active_tab == "new":
+    st.subheader("2. Paramétrage & Lancement de l'Analyse")
     
-    st.markdown(f"## 📜 Analyse Archivée : {entry['asset']} ({entry['tf']}) — {entry['timestamp']}")
-    st.markdown(f"**Prix au moment de l'analyse :** {entry['price']:.2f}")
-    st.markdown("### 📊 Rapport d'Analyse Global")
-    st.markdown(entry['report'])
+    col_tf, col_btn = st.columns([2, 1])
+    with col_tf:
+        selected_timeframe = st.selectbox("Choisissez l'unité de temps", list(TIMEFRAME_MAPPING.keys()))
     
-    st.markdown("---")
-    st.markdown("### 📋 Suivi de la Position")
-    
-    col_a, col_b = st.columns(2)
-    with col_a:
-        trade_executed = st.radio("Trade réalisé ?", ["Non", "Oui"], index=1 if entry['executed'] else 0, key=f"exec_{selected_id}")
-        entry['executed'] = (trade_executed == "Oui")
-        
-    with col_b:
-        if entry['executed']:
-            trade_result = st.radio("Résultat du trade :", ["En cours / Indéterminé", "Gagnant 🟢", "Perdant 🔴"], 
-                                    index=1 if entry['result'] == "Gagnant 🟢" else (2 if entry['result'] == "Perdant 🔴" else 0),
-                                    key=f"res_{selected_id}")
-            entry['result'] = trade_result
-        else:
-            entry['result'] = "N/A"
-            st.info("Cochez 'Oui' à 'Trade réalisé' pour renseigner le résultat.")
+    st.markdown("")
+    run_analysis = st.button("🚀 Lancer l'analyse", type="primary", use_container_width=True)
 
-else:
-    selected_timeframe = st.session_state.selected_timeframe
-
-    if selected_timeframe:
+    if run_analysis:
         tf_info = TIMEFRAME_MAPPING[selected_timeframe]
         
         with st.spinner(f"Chargement des données & actualités pour {selected_asset_name} ({selected_timeframe})..."):
@@ -321,139 +305,185 @@ else:
                 with st.spinner("Génération de l'analyse globale (Technique + Fondamentale)..."):
                     ai_text = generate_ai_report(prompt)
 
-                # Sauvegarde automatique dans le journal d'historique s'il ne s'agit pas d'un doublon direct
                 timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M")
                 new_id = len(st.session_state.trade_history) + 1
                 
-                # Vérification pour éviter les doublons lors du rechargement de la page
-                if not st.session_state.trade_history or st.session_state.trade_history[-1]['report'] != ai_text:
-                    st.session_state.trade_history.append({
-                        "id": new_id,
-                        "timestamp": timestamp_str,
-                        "asset": selected_asset_name,
-                        "ticker": ticker_symbol,
-                        "tf": selected_timeframe,
-                        "price": current_price,
-                        "report": ai_text,
-                        "executed": False,
-                        "result": "N/A"
-                    })
-
-                # --- CONSTRUCTION DU GRAPHIQUE EN CHANDELLES ---
-                fig, ax = plt.subplots(figsize=(10, 5))
+                new_entry = {
+                    "id": new_id,
+                    "timestamp": timestamp_str,
+                    "asset": selected_asset_name,
+                    "ticker": ticker_symbol,
+                    "tf": selected_timeframe,
+                    "price": current_price,
+                    "report": ai_text,
+                    "df": df,
+                    "pivot": pivot,
+                    "r1": r1, "r2": r2, "s1": s1, "s2": s2,
+                    "news": recent_news_list,
+                    "executed": False,
+                    "result": "En cours / Indéterminé"
+                }
                 
-                df_reset = df.reset_index()
-                x = df_reset.index.values
-                opens = df_reset['Open'].values
-                highs = df_reset['High'].values
-                lows = df_reset['Low'].values
-                closes = df_reset['Close'].values
-                
-                up = closes >= opens
-                down = closes < opens
+                st.session_state.trade_history.append(new_entry)
+                st.session_state.active_tab = new_id
+                st.rerun()
 
-                up_color = '#26a69a'   # Vert
-                down_color = '#ef5350' # Rouge
+else:
+    # Mode consultation d'une analyse de l'historique
+    entry = next((item for item in st.session_state.trade_history if item['id'] == st.session_state.active_tab), None)
+    
+    if entry:
+        if st.button("⬅️ Effectuer une nouvelle analyse"):
+            st.session_state.active_tab = "new"
+            st.rerun()
 
-                ax.vlines(x[up], lows[up], highs[up], color=up_color, linewidth=1)
-                ax.vlines(x[down], lows[down], highs[down], color=down_color, linewidth=1)
+        st.markdown(f"## 📜 Analyse Archivée : {entry['asset']} ({entry['tf']}) — {entry['timestamp']}")
+        st.markdown(f"**Ticker :** `{entry['ticker']}` | **Prix au moment de l'analyse :** {entry['price']:.2f}")
+        
+        # --- Graphique de l'archive ---
+        df = entry['df']
+        pivot, r1, r2, s1, s2 = entry['pivot'], entry['r1'], entry['r2'], entry['s1'], entry['s2']
+        
+        fig, ax = plt.subplots(figsize=(10, 5))
+        df_reset = df.reset_index()
+        x = df_reset.index.values
+        opens = df_reset['Open'].values
+        highs = df_reset['High'].values
+        lows = df_reset['Low'].values
+        closes = df_reset['Close'].values
+        
+        up = closes >= opens
+        down = closes < opens
 
-                body_bottom = np.minimum(opens, closes)
-                body_height = np.abs(closes - opens)
-                body_height[body_height == 0] = 0.01
+        up_color = '#26a69a'
+        down_color = '#ef5350'
 
-                ax.bar(x[up], body_height[up], bottom=body_bottom[up], color=up_color, width=0.6)
-                ax.bar(x[down], body_height[down], bottom=body_bottom[down], color=down_color, width=0.6)
+        ax.vlines(x[up], lows[up], highs[up], color=up_color, linewidth=1)
+        ax.vlines(x[down], lows[down], highs[down], color=down_color, linewidth=1)
 
-                if 'MM50' in df_reset.columns and df_reset['MM50'].notna().any():
-                    ax.plot(x, df_reset['MM50'], label='MM 50', color='orange', linewidth=1)
-                if 'MM200' in df_reset.columns and df_reset['MM200'].notna().any():
-                    ax.plot(x, df_reset['MM200'], label='MM 200', color='purple', linewidth=1)
+        body_bottom = np.minimum(opens, closes)
+        body_height = np.abs(closes - opens)
+        body_height[body_height == 0] = 0.01
 
-                if pivot > 0:
-                    ax.axhline(y=pivot, color='yellow', linestyle='--', alpha=0.8, label=f'Pivot: {pivot:.2f}')
-                    ax.axhline(y=r1, color='red', linestyle=':', alpha=0.6, label=f'R1 Fib: {r1:.2f}')
-                    ax.axhline(y=r2, color='darkred', linestyle=':', alpha=0.6, label=f'R2 Fib: {r2:.2f}')
-                    ax.axhline(y=s1, color='limegreen', linestyle=':', alpha=0.6, label=f'S1 Fib: {s1:.2f}')
-                    ax.axhline(y=s2, color='green', linestyle=':', alpha=0.6, label=f'S2 Fib: {s2:.2f}')
+        ax.bar(x[up], body_height[up], bottom=body_bottom[up], color=up_color, width=0.6)
+        ax.bar(x[down], body_height[down], bottom=body_bottom[down], color=down_color, width=0.6)
 
-                n_ticks = min(6, len(df_reset))
-                step = max(1, len(df_reset) // n_ticks)
-                tick_indices = list(range(0, len(df_reset), step))
-                date_col = 'Datetime' if 'Datetime' in df_reset.columns else 'Date'
-                tick_labels = [str(df_reset.iloc[i][date_col]).split()[0] for i in tick_indices]
-                
-                ax.set_xticks(tick_indices)
-                ax.set_xticklabels(tick_labels, rotation=30, fontsize=9)
+        if 'MM50' in df_reset.columns and df_reset['MM50'].notna().any():
+            ax.plot(x, df_reset['MM50'], label='MM 50', color='orange', linewidth=1)
+        if 'MM200' in df_reset.columns and df_reset['MM200'].notna().any():
+            ax.plot(x, df_reset['MM200'], label='MM 200', color='purple', linewidth=1)
 
-                ax.set_facecolor('#0e1117')
-                fig.patch.set_facecolor('#0e1117')
-                ax.tick_params(colors='white')
-                ax.xaxis.label.set_color('white')
-                ax.yaxis.label.set_color('white')
-                ax.title.set_color('white')
-                for spine in ax.spines.values():
-                    spine.set_edgecolor('gray')
+        if pivot > 0:
+            ax.axhline(y=pivot, color='yellow', linestyle='--', alpha=0.8, label=f'Pivot: {pivot:.2f}')
+            ax.axhline(y=r1, color='red', linestyle=':', alpha=0.6, label=f'R1 Fib: {r1:.2f}')
+            ax.axhline(y=r2, color='darkred', linestyle=':', alpha=0.6, label=f'R2 Fib: {r2:.2f}')
+            ax.axhline(y=s1, color='limegreen', linestyle=':', alpha=0.6, label=f'S1 Fib: {s1:.2f}')
+            ax.axhline(y=s2, color='green', linestyle=':', alpha=0.6, label=f'S2 Fib: {s2:.2f}')
 
-                ax.set_title(f"Graphique en Chandelles & Pivots Fibonacci — {selected_asset_name} ({selected_timeframe})", fontsize=12)
-                ax.legend(loc='upper left', facecolor='#262730', edgecolor='none', labelcolor='white')
-                ax.grid(True, linestyle=':', alpha=0.3, color='gray')
+        n_ticks = min(6, len(df_reset))
+        step = max(1, len(df_reset) // n_ticks)
+        tick_indices = list(range(0, len(df_reset), step))
+        date_col = 'Datetime' if 'Datetime' in df_reset.columns else 'Date'
+        tick_labels = [str(df_reset.iloc[i][date_col]).split()[0] for i in tick_indices]
+        
+        ax.set_xticks(tick_indices)
+        ax.set_xticklabels(tick_labels, rotation=30, fontsize=9)
 
-                # --- AFFICHAGE STREAMLIT ---
-                st.markdown("---")
-                
-                with st.expander("📰 Voir les flux d'actualités récents capturés", expanded=False):
-                    for headline in recent_news_list:
-                        st.write(headline)
+        ax.set_facecolor('#0e1117')
+        fig.patch.set_facecolor('#0e1117')
+        ax.tick_params(colors='white')
+        ax.xaxis.label.set_color('white')
+        ax.yaxis.label.set_color('white')
+        ax.title.set_color('white')
+        for spine in ax.spines.values():
+            spine.set_edgecolor('gray')
 
-                st.pyplot(fig)
+        ax.set_title(f"Graphique en Chandelles & Pivots Fibonacci — {entry['asset']} ({entry['tf']})", fontsize=12)
+        ax.legend(loc='upper left', facecolor='#262730', edgecolor='none', labelcolor='white')
+        ax.grid(True, linestyle=':', alpha=0.3, color='gray')
 
-                st.markdown("---")
-                st.markdown("### 📊 Rapport d'Analyse Global")
-                st.markdown(ai_text)
+        st.markdown("---")
+        with st.expander("📰 Voir les flux d'actualités capturés lors de l'analyse", expanded=False):
+            for headline in entry['news']:
+                st.write(headline)
 
-                # ---------------------------------------------------------
-                # 💬 CHAT INTERACTIF AVEC GEMINI POUR AFFINER L'ANALYSE
-                # ---------------------------------------------------------
-                st.markdown("---")
-                st.markdown("### 💬 Affiner l'analyse avec Gemini")
-                st.markdown("Posez vos questions complémentaires sur ce trade (gestion du risque, scénarios alternatifs, psychologie de marché, etc.) :")
+        st.pyplot(fig)
 
-                chat_key = f"chat_history_{ticker_symbol}_{selected_timeframe}"
-                if chat_key not in st.session_state:
-                    st.session_state[chat_key] = []
+        st.markdown("---")
+        st.markdown("### 📊 Rapport d'Analyse Global")
+        st.markdown(entry['report'])
 
-                for message in st.session_state[chat_key]:
-                    with st.chat_message(message["role"]):
-                        st.markdown(message["content"])
+        # --- Suivi du trade ---
+        st.markdown("---")
+        st.markdown("### 📋 Suivi de la Position")
+        col_a, col_b = st.columns(2)
+        
+        with col_a:
+            trade_executed = st.radio(
+                "Trade réalisé ?", 
+                ["Non", "Oui"], 
+                index=1 if entry['executed'] else 0, 
+                key=f"exec_{entry['id']}"
+            )
+            entry['executed'] = (trade_executed == "Oui")
+            
+        with col_b:
+            if entry['executed']:
+                result_options = ["En cours / Indéterminé", "Gagnant 🟢", "Perdant 🔴"]
+                current_res_idx = result_options.index(entry['result']) if entry['result'] in result_options else 0
+                trade_result = st.radio(
+                    "Résultat du trade :", 
+                    result_options, 
+                    index=current_res_idx,
+                    key=f"res_{entry['id']}"
+                )
+                entry['result'] = trade_result
+            else:
+                entry['result'] = "N/A"
+                st.info("Cochez 'Oui' à 'Trade réalisé' pour renseigner le résultat.")
 
-                if user_query := st.chat_input("Ex: Quel serait un meilleur niveau de Stop Loss si la volatilité augmente ?"):
-                    st.session_state[chat_key].append({"role": "user", "content": user_query})
-                    with st.chat_message("user"):
-                        st.markdown(user_query)
+        # --- Chat interactif spécifique à l'archive ---
+        st.markdown("---")
+        st.markdown("### 💬 Affiner l'analyse avec Gemini")
+        st.markdown("Posez vos questions complémentaires sur ce trade :")
 
-                    with st.chat_message("assistant"):
-                        with st.spinner("Gemini analyse votre question..."):
-                            conversation_history = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state[chat_key][:-1]])
-                            
-                            chat_prompt = f"""
-                            Tu es un assistant expert en trading et analyse financière.
-                            Contexte de l'actif analysé :
-                            - Actif : {selected_asset_name} ({ticker_symbol})
-                            - Unité de temps : {selected_timeframe}
-                            - Prix actuel : {current_price:.2f}
-                            - Pivots Fibonacci : P={pivot:.2f}, S1={s1:.2f}, S2={s2:.2f}, R1={r1:.2f}, R2={r2:.2f}
-                            - Rapport d'analyse initial fourni à l'utilisateur :
-                            {ai_text}
+        chat_key = f"chat_history_id_{entry['id']}"
+        if chat_key not in st.session_state:
+            st.session_state[chat_key] = []
 
-                            Historique de la conversation :
-                            {conversation_history}
+        for message in st.session_state[chat_key]:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
 
-                            Nouvelle question de l'utilisateur : {user_query}
+        if user_query := st.chat_input("Ex: Comment ajuster mon SL sur ce niveau ?", key=f"chat_input_{entry['id']}"):
+            st.session_state[chat_key].append({"role": "user", "content": user_query})
+            with st.chat_message("user"):
+                st.markdown(user_query)
 
-                            Réponds de manière précise, argumentée et professionnelle en tant qu'expert quantitatif.
-                            """
-                            
-                            reply = generate_ai_report(chat_prompt)
-                            st.markdown(reply)
-                            st.session_state[chat_key].append({"role": "assistant", "content": reply})
+            with st.chat_message("assistant"):
+                with st.spinner("Gemini analyse votre question..."):
+                    conversation_history = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state[chat_key][:-1]])
+                    
+                    chat_prompt = f"""
+                    Tu es un assistant expert en trading et analyse financière.
+                    Contexte de l'actif analysé :
+                    - Actif : {entry['asset']} ({entry['ticker']})
+                    - Unité de temps : {entry['tf']}
+                    - Prix actuel lors de l'analyse : {entry['price']:.2f}
+                    - Rapport d'analyse initial :
+                    {entry['report']}
+
+                    Historique de la conversation :
+                    {conversation_history}
+
+                    Nouvelle question de l'utilisateur : {user_query}
+
+                    Réponds de manière précise et professionnelle.
+                    """
+                    
+                    reply = generate_ai_report(chat_prompt)
+                    st.markdown(reply)
+                    st.session_state[chat_key].append({"role": "assistant", "content": reply})
+    else:
+        st.session_state.active_tab = "new"
+        st.rerun()
