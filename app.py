@@ -10,7 +10,7 @@ from datetime import datetime
 st.set_page_config(page_title="Bot Trading IA - Mondial & ISIN", layout="wide")
 
 st.title("🎯 Bot d'Analyse Trading Technique & Fondamental")
-st.markdown("Analyse technique (chandelles, indicateurs, pivots Fibonacci) et fondamentale (actualités en direct) avec journal de trading et suivi des performances.")
+st.markdown("Analyse technique (chandelles, indicateurs, pivots Fibonacci) et fondamentale (actualités en direct) avec journal de trading et gestion de l'historique.")
 
 # ---------------------------------------------------------
 # Liste des clés API Gemini (Système de rotation / Fallback)
@@ -153,7 +153,7 @@ else:
 
 st.sidebar.success(f"🔑 {len(API_KEYS)} clé(s) API configurée(s) !")
 
-# --- Menu Historique ---
+# --- Menu Historique & Gestion des suppressions ---
 st.sidebar.markdown("---")
 st.sidebar.header("📜 Historique des Requêtes")
 
@@ -178,6 +178,26 @@ if st.session_state.trade_history:
         if st.session_state.active_tab != selected_id:
             st.session_state.active_tab = selected_id
             st.rerun()
+
+    # --- Bloc de suppression d'éléments de l'historique ---
+    with st.sidebar.expander("🗑️ Gérer / Supprimer l'historique"):
+        all_labels = [f"{item['id']} | {item['timestamp']} - {item['asset']} ({item['tf']})" for item in st.session_state.trade_history]
+        to_delete_labels = st.multiselect("Sélectionner à supprimer :", all_labels)
+        
+        col_del1, col_del2 = st.columns(2)
+        with col_del1:
+            if st.button("Supprimer la sélection", use_container_width=True) and to_delete_labels:
+                ids_to_del = [int(lbl.split(" | ")[0]) for lbl in to_delete_labels]
+                st.session_state.trade_history = [item for item in st.session_state.trade_history if item['id'] not in ids_to_del]
+                if st.session_state.active_tab in ids_to_del:
+                    st.session_state.active_tab = "new"
+                st.rerun()
+        with col_del2:
+            if st.button("Tout supprimer", use_container_width=True):
+                st.session_state.trade_history = []
+                st.session_state.active_tab = "new"
+                st.rerun()
+
 else:
     st.sidebar.info("Aucune analyse enregistrée.")
     if st.session_state.active_tab != "new":
@@ -306,7 +326,7 @@ if st.session_state.active_tab == "new":
                     ai_text = generate_ai_report(prompt)
 
                 timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-                new_id = len(st.session_state.trade_history) + 1
+                new_id = (max([item['id'] for item in st.session_state.trade_history]) + 1) if st.session_state.trade_history else 1
                 
                 new_entry = {
                     "id": new_id,
