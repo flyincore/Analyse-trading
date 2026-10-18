@@ -1,6 +1,5 @@
 streamlit
 yfinance
 pandas
-git+https://github.com/twopirllc/pandas-ta.git
 google-generativeai
 matplotlib
