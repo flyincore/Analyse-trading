@@ -11,7 +11,7 @@ from datetime import datetime
 st.set_page_config(page_title="Bot Trading IA - Mondial & ISIN", layout="wide")
 
 st.title("🎯 Bot d'Analyse Trading Technique & Fondamental")
-st.markdown("Analyse technique (chandelles, indicateurs, pivots Fibonacci) et fondamentale (actualités en direct) avec visuels de trades, journal et gestion de l'historique.")
+st.markdown("Analyse technique, graphiques et scénarios détaillés avec journal de trading et gestion de l'historique.")
 
 # ---------------------------------------------------------
 # Liste des clés API Gemini (Système de rotation / Fallback)
@@ -125,7 +125,7 @@ def get_recent_news(ticker_str):
         return ["Impossible de récupérer les actualités récentes pour cet actif."]
 
 # ---------------------------------------------------------
-# Extraction ultra-robuste des niveaux de prix
+# Extraction robuste des niveaux de prix
 # ---------------------------------------------------------
 def extract_number(text_line):
     if not text_line:
@@ -144,17 +144,11 @@ def extract_trade_levels(ai_text, scenario_type):
     try:
         text_upper = ai_text.upper()
         if "ACHAT" in scenario_type:
-            if "SCÉNARIO D'ACHAT" in text_upper or "SCENARIO D'ACHAT" in text_upper:
-                pos = text_upper.find("ACHAT")
-                section = ai_text[pos:pos+1200]
-            else:
-                section = ai_text
+            pos = text_upper.find("ACHAT") if "ACHAT" in text_upper else 0
+            section = ai_text[pos:pos+1200]
         else:
-            if "SCÉNARIO DE VENTE" in text_upper or "SCENARIO DE VENTE" in text_upper:
-                pos = text_upper.find("VENTE")
-                section = ai_text[pos:pos+1200]
-            else:
-                section = ai_text
+            pos = text_upper.find("VENTE") if "VENTE" in text_upper else 0
+            section = ai_text[pos:pos+1200]
 
         entry, sl, tp1, tp2 = None, None, None, None
 
@@ -164,53 +158,93 @@ def extract_trade_levels(ai_text, scenario_type):
                 if not entry: entry = extract_number(line)
             elif "STOP LOSS" in line_up or "SL" in line_up:
                 if not sl: sl = extract_number(line)
-            elif "TAKE PROFIT 1" in line_up or "TP1" in line_up or "TAKE PROFIT 1 (TP1)" in line_up:
+            elif "TAKE PROFIT 1" in line_up or "TP1" in line_up:
                 if not tp1: tp1 = extract_number(line)
-            elif "TAKE PROFIT 2" in line_up or "TP2" in line_up or "TAKE PROFIT 2 (TP2)" in line_up:
+            elif "TAKE PROFIT 2" in line_up or "TP2" in line_up:
                 if not tp2: tp2 = extract_number(line)
 
         return entry, sl, tp1, tp2
     except Exception:
         return None, None, None, None
 
-def draw_trade_setup_chart(entry, sl, tp1, tp2, is_buy=True):
-    if not entry or not sl or not tp1:
-        return None
+# ---------------------------------------------------------
+# Générateur de graphique de bougies avec les niveaux du trade
+# ---------------------------------------------------------
+def draw_scenario_chart(df, pivot, r1, r2, s1, s2, entry, sl, tp1, tp2, asset_name, timeframe, is_buy=True):
+    fig, ax = plt.subplots(figsize=(10, 5))
     
-    fig, ax = plt.subplots(figsize=(7, 3.5))
-    fig.patch.set_facecolor('#0e1117')
+    df_reset = df.reset_index()
+    x = df_reset.index.values
+    opens = df_reset['Open'].values
+    highs = df_reset['High'].values
+    lows = df_reset['Low'].values
+    closes = df_reset['Close'].values
+    
+    up = closes >= opens
+    down = closes < opens
+
+    up_color = '#26a69a'
+    down_color = '#ef5350'
+
+    ax.vlines(x[up], lows[up], highs[up], color=up_color, linewidth=1)
+    ax.vlines(x[down], lows[down], highs[down], color=down_color, linewidth=1)
+
+    body_bottom = np.minimum(opens, closes)
+    body_height = np.abs(closes - opens)
+    body_height[body_height == 0] = 0.01
+
+    ax.bar(x[up], body_height[up], bottom=body_bottom[up], color=up_color, width=0.6)
+    ax.bar(x[down], body_height[down], bottom=body_bottom[down], color=down_color, width=0.6)
+
+    if 'MM50' in df_reset.columns and df_reset['MM50'].notna().any():
+        ax.plot(x, df_reset['MM50'], label='MM 50', color='orange', linewidth=1)
+    if 'MM200' in df_reset.columns and df_reset['MM200'].notna().any():
+        ax.plot(x, df_reset['MM200'], label='MM 200', color='purple', linewidth=1)
+
+    # Niveaux de Fibonacci de base
+    if pivot > 0:
+        ax.axhline(y=pivot, color='yellow', linestyle='--', alpha=0.5, label=f'Pivot: {pivot:.2f}')
+        ax.axhline(y=r1, color='red', linestyle=':', alpha=0.4, label=f'R1: {r1:.2f}')
+        ax.axhline(y=s1, color='green', linestyle=':', alpha=0.4, label=f'S1: {s1:.2f}')
+
+    # Ajout des zones de couleur spécifique au trade (Vert pâle pour le TP, Rouge pâle pour le SL)
+    if entry and sl and tp1:
+        target_tp = tp2 if tp2 else tp1
+        if is_buy:
+            ax.axhspan(entry, target_tp, color='#a8e6cf', alpha=0.3, label='Zone de Gain (TP)')
+            ax.axhspan(sl, entry, color='#ffb3ba', alpha=0.3, label='Zone de Risque (SL)')
+        else:
+            ax.axhspan(target_tp, entry, color='#a8e6cf', alpha=0.3, label='Zone de Gain (TP)')
+            ax.axhspan(entry, sl, color='#ffb3ba', alpha=0.3, label='Zone de Risque (SL)')
+
+        ax.axhline(entry, color='white', linestyle='-', linewidth=1.5, label=f'Entrée: {entry}')
+        ax.axhline(sl, color='#ef5350', linestyle='--', linewidth=1.5, label=f'SL: {sl}')
+        ax.axhline(tp1, color='#26a69a', linestyle='--', linewidth=1.5, label=f'TP1: {tp1}')
+        if tp2:
+            ax.axhline(tp2, color='#004d40', linestyle=':', linewidth=1.5, label=f'TP2: {tp2}')
+
+    n_ticks = min(6, len(df_reset))
+    step = max(1, len(df_reset) // n_ticks)
+    tick_indices = list(range(0, len(df_reset), step))
+    date_col = 'Datetime' if 'Datetime' in df_reset.columns else 'Date'
+    tick_labels = [str(df_reset.iloc[i][date_col]).split()[0] for i in tick_indices]
+    
+    ax.set_xticks(tick_indices)
+    ax.set_xticklabels(tick_labels, rotation=30, fontsize=9)
+
     ax.set_facecolor('#0e1117')
-    
-    all_vals = [entry, sl, tp1]
-    if tp2: all_vals.append(tp2)
-    min_p, max_p = min(all_vals), max(all_vals)
-    margin = (max_p - min_p) * 0.30 if max_p != min_p else entry * 0.02
-    
-    ax.set_ylim(min_p - margin, max_p + margin)
-    ax.set_xlim(0, 1)
-    ax.axis('off')
-    
-    if is_buy:
-        target_tp = tp2 if tp2 else tp1
-        ax.axhspan(entry, target_tp, color='#26a69a', alpha=0.25, label='Zone de Gain (TP)')
-        ax.axhspan(sl, entry, color='#ef5350', alpha=0.25, label='Zone de Risque (SL)')
-    else:
-        target_tp = tp2 if tp2 else tp1
-        ax.axhspan(target_tp, entry, color='#26a69a', alpha=0.25, label='Zone de Gain (TP)')
-        ax.axhspan(entry, sl, color='#ef5350', alpha=0.25, label='Zone de Risque (SL)')
-        
-    ax.axhline(entry, color='white', linestyle='-', linewidth=2)
-    ax.text(0.5, entry, f'  📍 Point d\'Entrée: {entry:.2f}  ', color='white', fontweight='bold', ha='center', va='center', fontsize=10, bbox=dict(facecolor='#1e222d', edgecolor='white', alpha=0.9, boxstyle='round,pad=0.4'))
-    
-    ax.axhline(sl, color='#ef5350', linestyle='--', linewidth=1.5)
-    ax.text(0.5, sl, f'  🛡️ Stop Loss (SL): {sl:.2f}  ', color='#ff8a80', fontweight='bold', ha='center', va='center', fontsize=9, bbox=dict(facecolor='#1e222d', edgecolor='#ef5350', alpha=0.9, boxstyle='round,pad=0.3'))
-    
-    ax.axhline(tp1, color='#26a69a', linestyle='--', linewidth=1.5)
-    ax.text(0.5, tp1, f'  🎯 Take Profit 1 (TP1): {tp1:.2f}  ', color='#80cbc4', fontweight='bold', ha='center', va='center', fontsize=9, bbox=dict(facecolor='#1e222d', edgecolor='#26a69a', alpha=0.9, boxstyle='round,pad=0.3'))
-    
-    if tp2:
-        ax.axhline(tp2, color='#004d40', linestyle=':', linewidth=1.5)
-        ax.text(0.5, tp2, f'  🎯 Take Profit 2 (TP2): {tp2:.2f}  ', color='#a7ffeb', fontweight='bold', ha='center', va='center', fontsize=9, bbox=dict(facecolor='#1e222d', edgecolor='#004d40', alpha=0.9, boxstyle='round,pad=0.3'))
+    fig.patch.set_facecolor('#0e1117')
+    ax.tick_params(colors='white')
+    ax.xaxis.label.set_color('white')
+    ax.yaxis.label.set_color('white')
+    ax.title.set_color('white')
+    for spine in ax.spines.values():
+        spine.set_edgecolor('gray')
+
+    scenario_label = "Scénario Achat (LONG)" if is_buy else "Scénario Vente (SHORT)"
+    ax.set_title(f"{scenario_label} — {asset_name} ({timeframe})", fontsize=11)
+    ax.legend(loc='upper left', facecolor='#262730', edgecolor='none', labelcolor='white', fontsize=8)
+    ax.grid(True, linestyle=':', alpha=0.3, color='gray')
 
     plt.tight_layout()
     return fig
@@ -449,104 +483,51 @@ else:
         st.markdown(f"## 📜 Analyse Archivée : {entry['asset']} ({entry['tf']}) — {entry['timestamp']}")
         st.markdown(f"**Ticker :** `{entry['ticker']}` | **Prix au moment de l'analyse :** {entry['price']:.2f}")
         
-        # --- Graphique de l'archive ---
         df = entry['df']
         pivot, r1, r2, s1, s2 = entry['pivot'], entry['r1'], entry['r2'], entry['s1'], entry['s2']
-        
-        fig, ax = plt.subplots(figsize=(10, 5))
-        df_reset = df.reset_index()
-        x = df_reset.index.values
-        opens = df_reset['Open'].values
-        highs = df_reset['High'].values
-        lows = df_reset['Low'].values
-        closes = df_reset['Close'].values
-        
-        up = closes >= opens
-        down = closes < opens
-
-        up_color = '#26a69a'
-        down_color = '#ef5350'
-
-        ax.vlines(x[up], lows[up], highs[up], color=up_color, linewidth=1)
-        ax.vlines(x[down], lows[down], highs[down], color=down_color, linewidth=1)
-
-        body_bottom = np.minimum(opens, closes)
-        body_height = np.abs(closes - opens)
-        body_height[body_height == 0] = 0.01
-
-        ax.bar(x[up], body_height[up], bottom=body_bottom[up], color=up_color, width=0.6)
-        ax.bar(x[down], body_height[down], bottom=body_bottom[down], color=down_color, width=0.6)
-
-        if 'MM50' in df_reset.columns and df_reset['MM50'].notna().any():
-            ax.plot(x, df_reset['MM50'], label='MM 50', color='orange', linewidth=1)
-        if 'MM200' in df_reset.columns and df_reset['MM200'].notna().any():
-            ax.plot(x, df_reset['MM200'], label='MM 200', color='purple', linewidth=1)
-
-        if pivot > 0:
-            ax.axhline(y=pivot, color='yellow', linestyle='--', alpha=0.8, label=f'Pivot: {pivot:.2f}')
-            ax.axhline(y=r1, color='red', linestyle=':', alpha=0.6, label=f'R1 Fib: {r1:.2f}')
-            ax.axhline(y=r2, color='darkred', linestyle=':', alpha=0.6, label=f'R2 Fib: {r2:.2f}')
-            ax.axhline(y=s1, color='limegreen', linestyle=':', alpha=0.6, label=f'S1 Fib: {s1:.2f}')
-            ax.axhline(y=s2, color='green', linestyle=':', alpha=0.6, label=f'S2 Fib: {s2:.2f}')
-
-        n_ticks = min(6, len(df_reset))
-        step = max(1, len(df_reset) // n_ticks)
-        tick_indices = list(range(0, len(df_reset), step))
-        date_col = 'Datetime' if 'Datetime' in df_reset.columns else 'Date'
-        tick_labels = [str(df_reset.iloc[i][date_col]).split()[0] for i in tick_indices]
-        
-        ax.set_xticks(tick_indices)
-        ax.set_xticklabels(tick_labels, rotation=30, fontsize=9)
-
-        ax.set_facecolor('#0e1117')
-        fig.patch.set_facecolor('#0e1117')
-        ax.tick_params(colors='white')
-        ax.xaxis.label.set_color('white')
-        ax.yaxis.label.set_color('white')
-        ax.title.set_color('white')
-        for spine in ax.spines.values():
-            spine.set_edgecolor('gray')
-
-        ax.set_title(f"Graphique en Chandelles & Pivots Fibonacci — {entry['asset']} ({entry['tf']})", fontsize=12)
-        ax.legend(loc='upper left', facecolor='#262730', edgecolor='none', labelcolor='white')
-        ax.grid(True, linestyle=':', alpha=0.3, color='gray')
 
         st.markdown("---")
         with st.expander("📰 Voir les flux d'actualités capturés lors de l'analyse", expanded=False):
             for headline in entry['news']:
                 st.write(headline)
 
-        st.pyplot(fig)
-
         st.markdown("---")
         st.markdown("### 📊 Rapport d'Analyse Global")
-        st.markdown(entry['report'])
-
-        # --- Affichage des graphiques visuels de trade (Achat & Vente) ---
-        st.markdown("---")
-        st.markdown("### 📈 Visualisation Graphique des Scénarios de Trade")
         
+        # Extraction des niveaux d'achat et de vente pour les graphiques sous les scénarios
         buy_entry, buy_sl, buy_tp1, buy_tp2 = extract_trade_levels(entry['report'], "ACHAT")
         sell_entry, sell_sl, sell_tp1, sell_tp2 = extract_trade_levels(entry['report'], "VENTE")
+
+        # Affichage du rapport en séparant le texte et les blocs de scénarios
+        report_text = entry['report']
         
-        col_vis1, col_vis2 = st.columns(2)
-        with col_vis1:
-            st.markdown("#### 🟢 Visuel du Scénario d'Achat")
-            fig_buy_setup = draw_trade_setup_chart(buy_entry, buy_sl, buy_tp1, buy_tp2, is_buy=True)
-            if fig_buy_setup:
-                st.pyplot(fig_buy_setup)
-                plt.close(fig_buy_setup)
-            else:
-                st.info("Niveaux d'achat non détectés pour ce visuel.")
-                
-        with col_vis2:
-            st.markdown("#### 🔴 Visuel du Scénario de Vente")
-            fig_sell_setup = draw_trade_setup_chart(sell_entry, sell_sl, sell_tp1, sell_tp2, is_buy=False)
-            if fig_sell_setup:
-                st.pyplot(fig_sell_setup)
-                plt.close(fig_sell_setup)
-            else:
-                st.info("Niveaux de vente non détectés pour ce visuel.")
+        if "### 🟢 SCÉNARIO D'ACHAT" in report_text and "### 🔴 SCÉNARIO DE VENTE" in report_text:
+            parts = report_text.split("### 🟢 SCÉNARIO D'ACHAT")
+            general_part = parts[0]
+            rest = parts[1].split("### 🔴 SCÉNARIO DE VENTE")
+            achat_part = "### 🟢 SCÉNARIO D'ACHAT" + rest[0]
+            vente_part = "### 🔴 SCÉNARIO DE VENTE" + rest[1]
+
+            # Affichage de l'analyse fondamentale et technique générale
+            st.markdown(general_part)
+
+            # Affichage du scénario d'achat suivi de son graphique de chandelles dédié
+            st.markdown("---")
+            st.markdown(achat_part)
+            fig_achat = draw_scenario_chart(df, pivot, r1, r2, s1, s2, buy_entry, buy_sl, buy_tp1, buy_tp2, entry['asset'], entry['tf'], is_buy=True)
+            if fig_achat:
+                st.pyplot(fig_achat)
+                plt.close(fig_achat)
+
+            # Affichage du scénario de vente suivi de son graphique de chandelles dédié
+            st.markdown("---")
+            st.markdown(vente_part)
+            fig_vente = draw_scenario_chart(df, pivot, r1, r2, s1, s2, sell_entry, sell_sl, sell_tp1, sell_tp2, entry['asset'], entry['tf'], is_buy=False)
+            if fig_vente:
+                st.pyplot(fig_vente)
+                plt.close(fig_vente)
+        else:
+            st.markdown(report_text)
 
         # --- Suivi du trade ---
         st.markdown("---")
