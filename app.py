@@ -3,7 +3,7 @@ import yfinance as yf
 import pandas as pd
 import pandas_ta as ta
 import google.generativeai as genai
-import plotly.graph_objects as go
+import matplotlib.pyplot as plt
 import re
 
 # Configuration de la page Streamlit
@@ -13,7 +13,7 @@ st.title("🎯 Bot d'Analyse Technique & Fondamentale Multi-Actifs")
 st.markdown("Combinez l'analyse technique (indicateurs, pivots, graphique) et l'analyse fondamentale (actualités récentes) pour une prise de décision optimale.")
 
 # ---------------------------------------------------------
-# Configuration automatique de la clé API
+# Configuration de la clé API
 # ---------------------------------------------------------
 API_KEY = "AQ.Ab8RN6KvFijAko4RVnTWf9Uf3qE4lVbXgrMsTXay1utBmqq5-w"
 genai.configure(api_key=API_KEY)
@@ -67,7 +67,6 @@ TIMEFRAME_MAPPING = {
     "D1":  {"interval": "1d",  "period": "1y"}
 }
 
-# Fonction de récupération des actualités Yahoo Finance
 def get_recent_news(ticker_str):
     try:
         t = yf.Ticker(ticker_str)
@@ -209,56 +208,31 @@ if selected_timeframe:
                 response = model.generate_content(prompt)
                 ai_text = response.text
 
-            # --- CONSTRUCTION DU GRAPHIQUE INTERACTIF PLOTLY ---
-            fig = go.Figure()
-
-            fig.add_trace(go.Candlestick(
-                x=df.index,
-                open=df['Open'],
-                high=df['High'],
-                low=df['Low'],
-                close=df['Close'],
-                name='Prix'
-            ))
-
+            # --- CONSTRUCTION DU GRAPHIQUE STABLE MATPLOTLIB ---
+            fig, ax = plt.subplots(figsize=(10, 5))
+            ax.plot(df.index, df['Close'], label='Prix Clôture', color='#00d2ff', linewidth=1.5)
+            
             if 'MM50' in df.columns:
-                fig.add_trace(go.Scatter(x=df.index, y=df['MM50'], mode='lines', name='MM 50', line=dict(color='orange', width=1.5)))
-            if 'MM100' in df.columns:
-                fig.add_trace(go.Scatter(x=df.index, y=df['MM100'], mode='lines', name='MM 100', line=dict(color='blue', width=1.5)))
+                ax.plot(df.index, df['MM50'], label='MM 50', color='orange', linewidth=1)
             if 'MM200' in df.columns:
-                fig.add_trace(go.Scatter(x=df.index, y=df['MM200'], mode='lines', name='MM 200', line=dict(color='purple', width=1.5)))
+                ax.plot(df.index, df['MM200'], label='MM 200', color='purple', linewidth=1)
 
-            if pivot > 0: fig.add_hline(y=pivot, line_dash="dash", line_color="gray", annotation_text=f"Pivot: {pivot:.2f}")
-            if s1 > 0: fig.add_hline(y=s1, line_dash="dot", line_color="indianred", annotation_text=f"S1: {s1:.2f}")
-            if r1 > 0: fig.add_hline(y=r1, line_dash="dot", line_color="mediumseagreen", annotation_text=f"R1: {r1:.2f}")
+            if pivot > 0:
+                ax.axhline(y=pivot, color='gray', linestyle='--', alpha=0.7, label=f'Pivot: {pivot:.2f}')
 
-            try:
-                buy_entry_match = re.search(r"SCÉNARIO D'ACHAT.*?Point d'entrée recommandé.*?:.*?([0-9]+\.[0-9]+)", ai_text, re.DOTALL)
-                buy_sl_match = re.search(r"SCÉNARIO D'ACHAT.*?Stop Loss.*?([0-9]+\.[0-9]+)", ai_text, re.DOTALL)
-                buy_tp1_match = re.search(r"SCÉNARIO D'ACHAT.*?Take Profit 1.*?([0-9]+\.[0-9]+)", ai_text, re.DOTALL)
-                
-                sell_entry_match = re.search(r"SCÉNARIO DE VENTE.*?Point d'entrée recommandé.*?:.*?([0-9]+\.[0-9]+)", ai_text, re.DOTALL)
-                sell_sl_match = re.search(r"SCÉNARIO DE VENTE.*?Stop Loss.*?([0-9]+\.[0-9]+)", ai_text, re.DOTALL)
-                sell_tp1_match = re.search(r"SCÉNARIO DE VENTE.*?Take Profit 1.*?([0-9]+\.[0-9]+)", ai_text, re.DOTALL)
+            # Style du graphique sombre
+            ax.set_facecolor('#0e1117')
+            fig.patch.set_facecolor('#0e1117')
+            ax.tick_params(colors='white')
+            ax.xaxis.label.set_color('white')
+            ax.yaxis.label.set_color('white')
+            ax.title.set_color('white')
+            for spine in ax.spines.values():
+                spine.set_edgecolor('gray')
 
-                if buy_entry_match: fig.add_hline(y=float(buy_entry_match.group(1)), line_dash="solid", line_color="green", annotation_text=f"Entrée Achat: {buy_entry_match.group(1)}")
-                if buy_sl_match: fig.add_hline(y=float(buy_sl_match.group(1)), line_dash="dash", line_color="red", annotation_text=f"SL Achat: {buy_sl_match.group(1)}")
-                if buy_tp1_match: fig.add_hline(y=float(buy_tp1_match.group(1)), line_dash="dash", line_color="green", annotation_text=f"TP1 Achat: {buy_tp1_match.group(1)}")
-
-                if sell_entry_match: fig.add_hline(y=float(sell_entry_match.group(1)), line_dash="solid", line_color="darkred", annotation_text=f"Entrée Vente: {sell_entry_match.group(1)}")
-                if sell_sl_match: fig.add_hline(y=float(sell_sl_match.group(1)), line_dash="dash", line_color="orange", annotation_text=f"SL Vente: {sell_sl_match.group(1)}")
-                if sell_tp1_match: fig.add_hline(y=float(sell_tp1_match.group(1)), line_dash="dash", line_color="darkgreen", annotation_text=f"TP1 Vente: {sell_tp1_match.group(1)}")
-            except Exception:
-                pass
-
-            fig.update_layout(
-                title=f"Graphique Technique & Niveaux Clés — {selected_asset_name} ({selected_timeframe})",
-                xaxis_title="Date / Heure",
-                yaxis_title="Prix ($)",
-                template="plotly_dark",
-                height=650,
-                xaxis_rangeslider_visible=False
-            )
+            ax.set_title(f"Graphique Technique — {selected_asset_name} ({selected_timeframe})", fontsize=12)
+            ax.legend(loc='upper left', facecolor='#262730', edgecolor='none', labelcolor='white')
+            ax.grid(True, linestyle=':', alpha=0.3, color='gray')
 
             # --- AFFICHAGE STREAMLIT ---
             st.markdown("---")
@@ -267,7 +241,7 @@ if selected_timeframe:
                 for headline in recent_news_list:
                     st.write(headline)
 
-            st.plotly_chart(fig, use_container_width=True, key="graphique_trading_unique")
+            st.pyplot(fig)
 
             st.markdown("---")
             st.markdown("### 📊 Rapport d'Analyse Global")
