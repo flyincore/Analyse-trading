@@ -1,6 +1,7 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
+import numpy as np
 import google.generativeai as genai
 import matplotlib.pyplot as plt
 
@@ -84,7 +85,6 @@ ASSETS_DICTIONARY = {
     }
 }
 
-# Mapping mis à jour avec les unités Mois et Années
 TIMEFRAME_MAPPING = {
     "M15":    {"interval": "15m", "period": "7d"},
     "M30":    {"interval": "30m", "period": "14d"},
@@ -111,7 +111,7 @@ def get_recent_news(ticker_str):
         return ["Impossible de récupérer les actualités récentes pour cet actif."]
 
 # ---------------------------------------------------------
-# Barre latérale : Sélection globale (Ticker / ISIN / Menu)
+# Barre latérale : Sélection globale
 # ---------------------------------------------------------
 st.sidebar.header("1. Sélection de l'Actif")
 
@@ -142,7 +142,6 @@ st.subheader("2. Choisissez l'unité de temps pour l'analyse")
 if "selected_timeframe" not in st.session_state:
     st.session_state.selected_timeframe = None
 
-# 7 colonnes pour intégrer M15, M30, H1, H4, D1, Mois, Années
 col1, col2, col3, col4, col5, col6, col7 = st.columns(7)
 if col1.button("⚡ M15", use_container_width=True):    st.session_state.selected_timeframe = "M15"
 if col2.button("⏱️ M30", use_container_width=True):    st.session_state.selected_timeframe = "M30"
@@ -257,26 +256,32 @@ if selected_timeframe:
             with st.spinner("Génération de l'analyse globale (Technique + Fondamentale)..."):
                 ai_text = generate_ai_report(prompt)
 
-            # --- CONSTRUCTION DU GRAPHIQUE EN CHANDELLES ---
+            # --- CONSTRUCTION DU GRAPHIQUE EN CHANDELLES ULTRA-RAPIDE (VECTORISÉ) ---
             fig, ax = plt.subplots(figsize=(10, 5))
             
             df_reset = df.reset_index()
-            x = range(len(df_reset))
+            x = df_reset.index.values
+            opens = df_reset['Open'].values
+            highs = df_reset['High'].values
+            lows = df_reset['Low'].values
+            closes = df_reset['Close'].values
             
+            up = closes >= opens
+            down = closes < opens
+
             up_color = '#26a69a'   # Vert
             down_color = '#ef5350' # Rouge
 
-            for i in x:
-                row = df_reset.iloc[i]
-                o, h, l, c = row['Open'], row['High'], row['Low'], row['Close']
-                color = up_color if c >= o else down_color
-                
-                ax.vlines(i, l, h, color=color, linewidth=1)
-                body_bottom = min(o, c)
-                body_height = abs(c - o)
-                if body_height == 0:
-                    body_height = 0.01
-                ax.bar(i, body_height, bottom=body_bottom, color=color, width=0.6)
+            # Tracé vectorisé des mèches et corps de bougies (sans boucle lente)
+            ax.vlines(x[up], lows[up], highs[up], color=up_color, linewidth=1)
+            ax.vlines(x[down], lows[down], highs[down], color=down_color, linewidth=1)
+
+            body_bottom = np.minimum(opens, closes)
+            body_height = np.abs(closes - opens)
+            body_height[body_height == 0] = 0.01
+
+            ax.bar(x[up], body_height[up], bottom=body_bottom[up], color=up_color, width=0.6)
+            ax.bar(x[down], body_height[down], bottom=body_bottom[down], color=down_color, width=0.6)
 
             if 'MM50' in df_reset.columns and df_reset['MM50'].notna().any():
                 ax.plot(x, df_reset['MM50'], label='MM 50', color='orange', linewidth=1)
