@@ -11,7 +11,7 @@ from datetime import datetime
 st.set_page_config(page_title="Bot Trading IA - Mondial & ISIN", layout="wide")
 
 st.title("🎯 Bot d'Analyse Trading Technique & Fondamental")
-st.markdown("Analyse technique complète, graphique global ultra-lisible, journal de trading et gestion de l'historique.")
+st.markdown("Analyse technique rapide, graphique global ultra-lisible, journal de trading et gestion de l'historique.")
 
 # ---------------------------------------------------------
 # Liste des clés API Gemini (Système de rotation / Fallback)
@@ -224,7 +224,7 @@ ASSETS_DICTIONARY = {
         "Litecoin (LTC/USD)": "LTC-USD",
         "Uniswap (UNI/USD)": "UNI-USD",
         "Cosmos (ATOM/USD)": "ATOM-USD",
-        "Monero (XMR/USD)": "XMR-USD",
+        "Monero (XMR/USD)": "Monero-USD",
         "Stellar (XLM/USD)": "XLM-USD",
         "Near Protocol (NEAR/USD)": "NEAR-USD",
         "Render (RENDER/USD)": "RENDER-USD",
@@ -236,15 +236,30 @@ ASSETS_DICTIONARY = {
     }
 }
 
+# Unités de temps optimisées pour un chargement rapide
 TIMEFRAME_MAPPING = {
-    "M15":    {"interval": "15m", "period": "7d"},
-    "M30":    {"interval": "30m", "period": "14d"},
-    "H1":     {"interval": "1h",  "period": "30d"},
-    "H4":     {"interval": "1h",  "period": "60d"},
-    "D1":     {"interval": "1d",  "period": "1y"},
-    "Mois":   {"interval": "1mo", "period": "5y"},
-    "Années": {"interval": "1mo", "period": "max"}
+    "M15":    {"interval": "15m", "period": "5d"},
+    "M30":    {"interval": "30m", "period": "10d"},
+    "H1":     {"interval": "1h",  "period": "20d"},
+    "H4":     {"interval": "1h",  "period": "40d"},
+    "D1":     {"interval": "1d",  "period": "6mo"},
+    "Mois":   {"interval": "1mo", "period": "2y"},
+    "Années": {"interval": "1mo", "period": "5y"}
 }
+
+@st.cache_data(ttl=300)
+def load_market_data(ticker_str, period, interval):
+    df = yf.download(ticker_str, period=period, interval=interval, progress=False)
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+    return df
+
+@st.cache_data(ttl=300)
+def load_daily_pivots_data(ticker_str):
+    df_d = yf.download(ticker_str, period="5d", interval="1d", progress=False)
+    if isinstance(df_d.columns, pd.MultiIndex):
+        df_d.columns = df_d.columns.get_level_values(0)
+    return df_d
 
 def get_recent_news(ticker_str):
     try:
@@ -252,7 +267,7 @@ def get_recent_news(ticker_str):
         news = t.news
         headlines = []
         if news and isinstance(news, list):
-            for item in news[:5]:
+            for item in news[:3]: # Limité à 3 pour plus de rapidité
                 title = item.get('title') or item.get('content', {}).get('title', '')
                 publisher = item.get('publisher') or item.get('content', {}).get('provider', {}).get('displayName', '')
                 if title:
@@ -262,10 +277,10 @@ def get_recent_news(ticker_str):
         return ["Impossible de récupérer les actualités récentes pour cet actif."]
 
 # ---------------------------------------------------------
-# Graphique technique global ultra-grand et très lisible
+# Graphique technique global ultra-lisible
 # ---------------------------------------------------------
 def draw_global_chart(df, pivot, r1, r2, s1, s2, asset_name, timeframe):
-    fig, ax = plt.subplots(figsize=(13, 7))  # Graphique plus large et plus haut pour une lisibilité maximale
+    fig, ax = plt.subplots(figsize=(13, 7))
     
     df_reset = df.reset_index()
     x = df_reset.index.values
@@ -420,11 +435,8 @@ if st.session_state.active_tab == "new":
     if run_analysis:
         tf_info = TIMEFRAME_MAPPING[selected_timeframe]
         
-        with st.spinner(f"Chargement des données & actualités pour {selected_asset_name} ({selected_timeframe})..."):
-            df = yf.download(ticker_symbol, period=tf_info["period"], interval=tf_info["interval"], progress=False)
-            if isinstance(df.columns, pd.MultiIndex):
-                df.columns = df.columns.get_level_values(0)
-
+        with st.spinner(f"Chargement rapide des données pour {selected_asset_name} ({selected_timeframe})..."):
+            df = load_market_data(ticker_symbol, tf_info["period"], tf_info["interval"])
             recent_news_list = get_recent_news(ticker_symbol)
             news_text = "\n".join(recent_news_list)
 
@@ -446,9 +458,7 @@ if st.session_state.active_tab == "new":
                 df['MACD'] = exp1 - exp2
                 df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
 
-                df_d = yf.download(ticker_symbol, period="5d", interval="1d", progress=False)
-                if isinstance(df_d.columns, pd.MultiIndex):
-                    df_d.columns = df_d.columns.get_level_values(0)
+                df_d = load_daily_pivots_data(ticker_symbol)
                 
                 if len(df_d) >= 2:
                     prev_day = df_d.iloc[-2]
@@ -529,7 +539,7 @@ if st.session_state.active_tab == "new":
                 - Justification : [Explication]
                 """
 
-                with st.spinner("Génération de l'analyse globale (Technique + Fondamentale)..."):
+                with st.spinner("Génération du rapport par l'IA..."):
                     ai_text = generate_ai_report(prompt)
 
                 timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M")
