@@ -130,7 +130,6 @@ def get_recent_news(ticker_str):
 def extract_number(text_line):
     if not text_line:
         return None
-    # Remplace les virgules par des points et cherche un nombre flottant
     clean_line = text_line.replace(',', '.')
     match = re.search(r'([0-9]+\.?[0-9]*)', clean_line)
     if match:
@@ -192,19 +191,14 @@ def draw_trade_setup_chart(entry, sl, tp1, tp2, is_buy=True):
     ax.axis('off')
     
     if is_buy:
-        # Zone de Gain (Entrée -> TP2/TP1)
         target_tp = tp2 if tp2 else tp1
         ax.axhspan(entry, target_tp, color='#26a69a', alpha=0.25, label='Zone de Gain (TP)')
-        # Zone de Risque (SL -> Entrée)
         ax.axhspan(sl, entry, color='#ef5350', alpha=0.25, label='Zone de Risque (SL)')
     else:
-        # Vente : Gain vers le bas
         target_tp = tp2 if tp2 else tp1
         ax.axhspan(target_tp, entry, color='#26a69a', alpha=0.25, label='Zone de Gain (TP)')
-        # Risque vers le haut
         ax.axhspan(entry, sl, color='#ef5350', alpha=0.25, label='Zone de Risque (SL)')
         
-    # Tracé des lignes horizontales
     ax.axhline(entry, color='white', linestyle='-', linewidth=2)
     ax.text(0.5, entry, f'  📍 Point d\'Entrée: {entry:.2f}  ', color='white', fontweight='bold', ha='center', va='center', fontsize=10, bbox=dict(facecolor='#1e222d', edgecolor='white', alpha=0.9, boxstyle='round,pad=0.4'))
     
@@ -248,8 +242,6 @@ else:
     selected_asset_name = st.sidebar.selectbox("Sélectionnez l'Actif", list(ASSETS_DICTIONARY[selected_category].keys()))
     ticker_symbol = ASSETS_DICTIONARY[selected_category][selected_asset_name]
     st.sidebar.markdown(f"**Ticker Yahoo Finance :** `{ticker_symbol}`")
-
-st.sidebar.success(f"🔑 {len(API_KEYS)} clé(s) API configurée(s) !")
 
 # --- Menu Historique & Gestion des suppressions ---
 st.sidebar.markdown("---")
@@ -510,4 +502,123 @@ else:
         fig.patch.set_facecolor('#0e1117')
         ax.tick_params(colors='white')
         ax.xaxis.label.set_color('white')
-        ax.yaxis
+        ax.yaxis.label.set_color('white')
+        ax.title.set_color('white')
+        for spine in ax.spines.values():
+            spine.set_edgecolor('gray')
+
+        ax.set_title(f"Graphique en Chandelles & Pivots Fibonacci — {entry['asset']} ({entry['tf']})", fontsize=12)
+        ax.legend(loc='upper left', facecolor='#262730', edgecolor='none', labelcolor='white')
+        ax.grid(True, linestyle=':', alpha=0.3, color='gray')
+
+        st.markdown("---")
+        with st.expander("📰 Voir les flux d'actualités capturés lors de l'analyse", expanded=False):
+            for headline in entry['news']:
+                st.write(headline)
+
+        st.pyplot(fig)
+
+        st.markdown("---")
+        st.markdown("### 📊 Rapport d'Analyse Global")
+        st.markdown(entry['report'])
+
+        # --- Affichage des graphiques visuels de trade (Achat & Vente) ---
+        st.markdown("---")
+        st.markdown("### 📈 Visualisation Graphique des Scénarios de Trade")
+        
+        buy_entry, buy_sl, buy_tp1, buy_tp2 = extract_trade_levels(entry['report'], "ACHAT")
+        sell_entry, sell_sl, sell_tp1, sell_tp2 = extract_trade_levels(entry['report'], "VENTE")
+        
+        col_vis1, col_vis2 = st.columns(2)
+        with col_vis1:
+            st.markdown("#### 🟢 Visuel du Scénario d'Achat")
+            fig_buy_setup = draw_trade_setup_chart(buy_entry, buy_sl, buy_tp1, buy_tp2, is_buy=True)
+            if fig_buy_setup:
+                st.pyplot(fig_buy_setup)
+                plt.close(fig_buy_setup)
+            else:
+                st.info("Niveaux d'achat non détectés pour ce visuel.")
+                
+        with col_vis2:
+            st.markdown("#### 🔴 Visuel du Scénario de Vente")
+            fig_sell_setup = draw_trade_setup_chart(sell_entry, sell_sl, sell_tp1, sell_tp2, is_buy=False)
+            if fig_sell_setup:
+                st.pyplot(fig_sell_setup)
+                plt.close(fig_sell_setup)
+            else:
+                st.info("Niveaux de vente non détectés pour ce visuel.")
+
+        # --- Suivi du trade ---
+        st.markdown("---")
+        st.markdown("### 📋 Suivi de la Position")
+        col_a, col_b = st.columns(2)
+        
+        with col_a:
+            trade_executed = st.radio(
+                "Trade réalisé ?", 
+                ["Non", "Oui"], 
+                index=1 if entry['executed'] else 0, 
+                key=f"exec_{entry['id']}"
+            )
+            entry['executed'] = (trade_executed == "Oui")
+            
+        with col_b:
+            if entry['executed']:
+                result_options = ["En cours / Indéterminé", "Gagnant 🟢", "Perdant 🔴"]
+                current_res_idx = result_options.index(entry['result']) if entry['result'] in result_options else 0
+                trade_result = st.radio(
+                    "Résultat du trade :", 
+                    result_options, 
+                    index=current_res_idx,
+                    key=f"res_{entry['id']}"
+                )
+                entry['result'] = trade_result
+            else:
+                entry['result'] = "N/A"
+                st.info("Cochez 'Oui' à 'Trade réalisé' pour renseigner le résultat.")
+
+        # --- Chat interactif spécifique à l'archive ---
+        st.markdown("---")
+        st.markdown("### 💬 Affiner l'analyse avec Gemini")
+        st.markdown("Posez vos questions complémentaires sur ce trade :")
+
+        chat_key = f"chat_history_id_{entry['id']}"
+        if chat_key not in st.session_state:
+            st.session_state[chat_key] = []
+
+        for message in st.session_state[chat_key]:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+
+        if user_query := st.chat_input("Ex: Comment ajuster mon SL sur ce niveau ?", key=f"chat_input_{entry['id']}"):
+            st.session_state[chat_key].append({"role": "user", "content": user_query})
+            with st.chat_message("user"):
+                st.markdown(user_query)
+
+            with st.chat_message("assistant"):
+                with st.spinner("Gemini analyse votre question..."):
+                    conversation_history = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state[chat_key][:-1]])
+                    
+                    chat_prompt = f"""
+                    Tu es un assistant expert en trading et analyse financière.
+                    Contexte de l'actif analysé :
+                    - Actif : {entry['asset']} ({entry['ticker']})
+                    - Unité de temps : {entry['tf']}
+                    - Prix actuel lors de l'analyse : {entry['price']:.2f}
+                    - Rapport d'analyse initial :
+                    {entry['report']}
+
+                    Historique de la conversation :
+                    {conversation_history}
+
+                    Nouvelle question de l'utilisateur : {user_query}
+
+                    Réponds de manière précise et professionnelle.
+                    """
+                    
+                    reply = generate_ai_report(chat_prompt)
+                    st.markdown(reply)
+                    st.session_state[chat_key].append({"role": "assistant", "content": reply})
+    else:
+        st.session_state.active_tab = "new"
+        st.rerun()
