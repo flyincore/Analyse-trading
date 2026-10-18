@@ -267,7 +267,7 @@ if selected_timeframe:
                 for headline in recent_news_list:
                     st.write(headline)
 
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, key=f"chart_{ticker_symbol}_{selected_timeframe}")
 
             st.markdown("---")
             st.markdown("### 📊 Rapport d'Analyse Global")
