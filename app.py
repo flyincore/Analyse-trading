@@ -41,7 +41,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("🎯 Bot d'Analyse Trading Pro — Suite Institutionnelle")
-st.markdown("Analyse multi-timeframe, score de confluence, gestion des risques ATR, catalogue mondial complet et journal de trading.")
+st.markdown("Analyse technique & fondamentale, multi-timeframe, score de confluence, catalogue mondial complet et journal de trading.")
 
 # ---------------------------------------------------------
 # Liste des clés API Gemini (Système de rotation / Fallback)
@@ -383,7 +383,7 @@ if "current_analysis" not in st.session_state:
     st.session_state.current_analysis = None
 
 # ---------------------------------------------------------
-# Barre latérale : Sélection globale & Paramètres de Risque
+# Barre latérale : Sélection globale (Sans paramètres de risque)
 # ---------------------------------------------------------
 st.sidebar.header("1. Sélection de l'Actif")
 
@@ -403,11 +403,6 @@ else:
     selected_asset_name = st.sidebar.selectbox("Sélectionnez l'Actif", list(ASSETS_DICTIONARY[selected_category].keys()))
     ticker_symbol = ASSETS_DICTIONARY[selected_category][selected_asset_name]
     st.sidebar.markdown(f"**Ticker Yahoo Finance :** `{ticker_symbol}`")
-
-st.sidebar.markdown("---")
-st.sidebar.header("⚙️ Paramètres de Risque")
-user_capital = st.sidebar.number_input("Capital total (€ / $)", min_value=100.0, value=10000.0, step=500.0)
-risk_pct = st.sidebar.slider("Risque maximal par trade (%)", min_value=0.1, max_value=5.0, value=1.0, step=0.1)
 
 # --- Menu Historique ---
 st.sidebar.markdown("---")
@@ -522,10 +517,6 @@ if st.session_state.active_tab == "new":
                 if current_price <= s1 or current_price >= r1: confluence_score += 20
                 confluence_score = min(98, max(15, confluence_score))
 
-                risk_amount = user_capital * (risk_pct / 100.0)
-                sl_distance = 1.5 * atr_val
-                position_size_units = risk_amount / sl_distance if sl_distance > 0 else 0
-
                 prompt = f"""
                 Tu es un comité d'investissement et un algorithme de trading institutionnel expert.
                 Analyse l'actif **{selected_asset_name} ({ticker_symbol})** en unité de temps **{selected_timeframe}**.
@@ -544,17 +535,23 @@ if st.session_state.active_tab == "new":
 
                 Fournis un rapport complet structuré STRICTEMENT ainsi :
 
-                ### 1. 🌐 FILTRE MACRO & TENDANCE MULTI-TIMEFRAME
+                ### 1. 📰 ANALYSE FONDAMENTALE DE L'ACTIF
+                - Présentation de la santé fondamentale globale de l'actif, de son secteur et de l'environnement macroéconomique actuel.
+                - Analyse de l'impact des actualités récentes sur les perspectives de l'actif.
+
+                ---
+
+                ### 2. 🌐 FILTRE MACRO & TENDANCE MULTI-TIMEFRAME
                 - Analyse de la cohérence entre le flux d'actualité et la tendance de fond Daily ({mtf_trend}).
 
                 ---
 
-                ### 2. 📊 ANALYSE TECHNIQUE & SCORE DE CONFLUENCE ({confluence_score}%)
+                ### 3. 📊 ANALYSE TECHNIQUE & SCORE DE CONFLUENCE ({confluence_score}%)
                 - Interprétation des indicateurs (RSI, ATR, Bollinger) et des niveaux Fibonacci.
 
                 ---
 
-                ### 3. 🎯 PLAN DE TRADE INSTITUTIONNEL
+                ### 4. 🎯 PLAN DE TRADE INSTITUTIONNEL
                 - Recommandation claire (LONG / SHORT / WAIT).
                 - Point d'entrée, Stop Loss dynamique (basé sur ATR), et Take Profits (R/R 1:2 minimum).
                 """
@@ -572,9 +569,6 @@ if st.session_state.active_tab == "new":
                     "price": current_price,
                     "mtf_trend": mtf_trend,
                     "confluence": confluence_score,
-                    "atr": atr_val,
-                    "risk_amount": risk_amount,
-                    "position_units": position_size_units,
                     "report": ai_text,
                     "df": df,
                     "pivot": pivot,
@@ -590,11 +584,10 @@ if st.session_state.active_tab == "new":
         st.markdown("---")
         st.markdown(f"## 📊 Rapport Institutionnel : {ca['asset']} ({ca['tf']}) — {ca['timestamp']}")
         
-        m1, m2, m3, m4 = st.columns(4)
+        m1, m2, m3 = st.columns(3)
         with m1: st.metric("Tendance Daily (MTF)", ca['mtf_trend'])
         with m2: st.metric("Score de Confluence", f"{ca['confluence']}%")
-        with m3: st.metric("Risque Financier Alloué", f"{ca['risk_amount']:.2f} €")
-        with m4: st.metric("Unités / Lots conseillés", f"{ca['position_units']:.2f}")
+        with m3: st.metric("Prix de Référence", f"{ca['price']:.2f}")
 
         fig_interactive = draw_interactive_chart(ca['df'], ca['pivot'], ca['r1'], ca['r2'], ca['s1'], ca['s2'], ca['asset'], ca['tf'], zoom_36h=ca['zoom_36h'])
         st.plotly_chart(fig_interactive, use_container_width=True)
