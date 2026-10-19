@@ -44,13 +44,14 @@ st.title("🎯 Bot d'Analyse Trading Pro — Suite Institutionnelle")
 st.markdown("Analyse technique & fondamentale, multi-timeframe incluant le **Scalping**, score de confluence, gestion du SL en Break-Even et journal de trading.")
 
 # ---------------------------------------------------------
-# Liste des clés API Gemini (Système de rotation / Fallback)
+# Liste des clés API Gemini (Nouvelle liste de clés mise à jour)
 # ---------------------------------------------------------
 API_KEYS = [
-    "AQ.Ab8RN6J07BTFUTUoWBM2cfsiUduTyV756t_c7L6i6SZxY7wgTg",
     "AQ.Ab8RN6KvFijAko4RVnTWf9Uf3qE4lVbXgrMsTXay1utBmqq5-w",
+    "AQ.Ab8RN6I00i8wi5lYccvl0UHNBkTHAvQ6xZTQC6WQk3dIEOx1JQ",
     "AQ.Ab8RN6JCQvTU9IjwjDzw6puDfrNtZllbOnggOM69BtXEKgshqg",
-    "AQ.Ab8RN6I00i8wi5lYccvl0UHNBkTHAvQ6xZTQC6WQk3dIEOx1JQ"
+    "AQ.Ab8RN6J07BTFUTUoWBM2cfsiUduTyV756t_c7L6i6SZxY7wgTg",
+    "AIzaSyAm0u7-MLvgzKXczi3uiJ-98XXsIl19M2I"
 ]
 
 def generate_ai_report(prompt_text):
@@ -312,7 +313,6 @@ def draw_interactive_chart(df, pivot, r1, r2, s1, s2, asset_name, timeframe, zoo
     df_plot = df.copy()
     if zoom_36h and timeframe in ["Scalping", "M15", "H1", "H4"]:
         if isinstance(df_plot.index, pd.DatetimeIndex) and len(df_plot) > 0:
-            # Pour le scalping (1m sur 1j), le zoom 36h n'est pas restreint pour voir toute la journée
             if timeframe != "Scalping":
                 cutoff_time = df_plot.index[-1] - timedelta(hours=36)
                 df_plot = df_plot[df_plot.index >= cutoff_time]
