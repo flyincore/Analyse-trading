@@ -41,7 +41,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("🎯 Bot d'Analyse Trading Pro — Suite Institutionnelle")
-st.markdown("Analyse technique & fondamentale, multi-timeframe, score de confluence, gestion affinée par volume/spread/pip et journal de trading.")
+st.markdown("Analyse technique & fondamentale, multi-timeframe, score de confluence, calculs financiers précis en € et journal de trading.")
 
 # ---------------------------------------------------------
 # Liste des clés API Gemini (Système de rotation / Fallback)
@@ -81,188 +81,68 @@ def generate_ai_report(prompt_text):
 # ---------------------------------------------------------
 ASSETS_DICTIONARY = {
     "🇺🇸 Actions USA (Wall Street)": {
-        "Apple": "AAPL",
-        "Nvidia": "NVDA",
-        "Microsoft": "MSFT",
-        "Amazon": "AMZN",
-        "Alphabet (Google)": "GOOGL",
-        "Meta (Facebook)": "META",
-        "Tesla": "TSLA",
-        "AMD": "AMD",
-        "Netflix": "NFLX",
-        "Intel": "INTC",
-        "JPMorgan Chase": "JPM",
-        "Visa": "V",
-        "Mastercard": "MA",
-        "Bank of America": "BAC",
-        "Coca-Cola": "KO",
-        "PepsiCo": "PEP",
-        "Walt Disney": "DIS",
-        "Nike": "NKE",
-        "Pfizer": "PFE",
-        "Johnson & Johnson": "JNJ",
-        "ExxonMobil": "XOM",
-        "Chevron": "CVX",
-        "Walmart": "WMT",
-        "Palantir": "PLTR",
-        "Super Micro Computer": "SMCI"
+        "Apple": "AAPL", "Nvidia": "NVDA", "Microsoft": "MSFT", "Amazon": "AMZN",
+        "Alphabet (Google)": "GOOGL", "Meta (Facebook)": "META", "Tesla": "TSLA", "AMD": "AMD",
+        "Netflix": "NFLX", "Intel": "INTC", "JPMorgan Chase": "JPM", "Visa": "V",
+        "Mastercard": "MA", "Bank of America": "BAC", "Coca-Cola": "KO", "PepsiCo": "PEP",
+        "Walt Disney": "DIS", "Nike": "NKE", "Pfizer": "PFE", "Johnson & Johnson": "JNJ",
+        "ExxonMobil": "XOM", "Chevron": "CVX", "Walmart": "WMT", "Palantir": "PLTR", "Super Micro Computer": "SMCI"
     },
     "🇪🇺 Actions Europe (Euronext, DAX, LSE)": {
-        "TotalEnergies (France)": "TTE.PA",
-        "LVMH (France)": "MC.PA",
-        "ASML (Pays-Bas)": "ASML.AS",
-        "SAP (Allemagne)": "SAP.DE",
-        "Siemens (Allemagne)": "SIE.DE",
-        "Sanofi (France)": "SAN.PA",
-        "Airbus (France/DE)": "AIR.PA",
-        "L'Oréal (France)": "OR.PA",
-        "Schneider Electric (France)": "SU.PA",
-        "Air Liquide (France)": "AI.PA",
-        "BNP Paribas (France)": "BNP.PA",
-        "AXA (France)": "CS.PA",
-        "Hermès (France)": "RMS.PA",
-        "Kering (France)": "KER.PA",
-        "Stellantis (France/IT)": "STLAM.MI",
-        "Volkswagen (Allemagne)": "VOW3.DE",
-        "Allianz (Allemagne)": "ALV.DE",
-        "Mercedes-Benz (Allemagne)": "MBG.DE",
-        "BASF (Allemagne)": "BAS.DE",
-        "Bayer (Allemagne)": "BAYN.DE",
-        "Unilever (Royaume-Uni)": "ULVR.L",
-        "Shell (Royaume-Uni)": "SHEL.L",
-        "BP (Royaume-Uni)": "BP.L",
-        "HSBC (Royaume-Uni)": "HSBA.L",
-        "Banco Santander (Espagne)": "SAN.MC"
+        "TotalEnergies (France)": "TTE.PA", "LVMH (France)": "MC.PA", "ASML (Pays-Bas)": "ASML.AS",
+        "SAP (Allemagne)": "SAP.DE", "Siemens (Allemagne)": "SIE.DE", "Sanofi (France)": "SAN.PA",
+        "Airbus (France/DE)": "AIR.PA", "L'Oréal (France)": "OR.PA", "Schneider Electric (France)": "SU.PA",
+        "Air Liquide (France)": "AI.PA", "BNP Paribas (France)": "BNP.PA", "AXA (France)": "CS.PA",
+        "Hermès (France)": "RMS.PA", "Kering (France)": "KER.PA", "Stellantis (France/IT)": "STLAM.MI",
+        "Volkswagen (Allemagne)": "VOW3.DE", "Allianz (Allemagne)": "ALV.DE", "Mercedes-Benz (Allemagne)": "MBG.DE",
+        "BASF (Allemagne)": "BAS.DE", "Bayer (Allemagne)": "BAYN.DE", "Unilever (Royaume-Uni)": "ULVR.L",
+        "Shell (Royaume-Uni)": "SHEL.L", "BP (Royaume-Uni)": "BP.L", "HSBC (Royaume-Uni)": "HSBA.L", "Banco Santander (Espagne)": "SAN.MC"
     },
     "🌏 Actions Asie & Pacifique": {
-        "TSMC (Taïwan - ADR US)": "TSM",
-        "Toyota (Japon)": "7203.T",
-        "Sony (Japon)": "6758.T",
-        "Tencent (Hong Kong)": "0700.HK",
-        "Alibaba (Hong Kong)": "9988.HK",
-        "Samsung Electronics (Corée du Sud)": "005930.KS",
-        "SoftBank Group (Japon)": "9984.T",
-        "Nintendo (Japon)": "7974.T",
-        "Mitsubishi UFJ (Japon)": "8306.T",
-        "Keyence (Japon)": "6861.T",
-        "Tokyo Electron (Japon)": "8035.T",
-        "Fast Retailing / Uniqlo (Japon)": "9983.T",
-        "Honda (Japon)": "7267.T",
-        "KDDI (Japon)": "9433.T",
-        "Meituan (Hong Kong)": "3690.HK",
-        "JD.com (Hong Kong)": "9618.HK",
-        "Baidu (Hong Kong)": "9888.HK",
-        "Xiaomi (Hong Kong)": "1810.HK",
-        "BYD Company (Hong Kong)": "1211.HK",
-        "SK Hynix (Corée du Sud)": "000660.KS"
+        "TSMC (Taïwan - ADR US)": "TSM", "Toyota (Japon)": "7203.T", "Sony (Japon)": "6758.T",
+        "Tencent (Hong Kong)": "0700.HK", "Alibaba (Hong Kong)": "9988.HK", "Samsung Electronics (Corée du Sud)": "005930.KS",
+        "SoftBank Group (Japon)": "9984.T", "Nintendo (Japon)": "7974.T", "Mitsubishi UFJ (Japon)": "8306.T",
+        "Keyence (Japon)": "6861.T", "Tokyo Electron (Japon)": "8035.T", "Fast Retailing / Uniqlo (Japon)": "9983.T",
+        "Honda (Japon)": "7267.T", "KDDI (Japon)": "9433.T", "Meituan (Hong Kong)": "3690.HK",
+        "JD.com (Hong Kong)": "9618.HK", "Baidu (Hong Kong)": "9888.HK", "Xiaomi (Hong Kong)": "1810.HK",
+        "BYD Company (Hong Kong)": "1211.HK", "SK Hynix (Corée du Sud)": "000660.KS"
     },
     "📊 Indices Boursiers": {
-        "S&P 500 (USA)": "^GSPC",
-        "Nasdaq 100 (USA)": "^IXIC",
-        "Dow Jones Industrial Average (USA)": "^DJI",
-        "Russell 2000 (USA)": "^RUT",
-        "CAC 40 (France)": "^FCHI",
-        "DAX 40 (Allemagne)": "^GDAXI",
-        "Euro Stoxx 50 (Europe)": "^STOXX50E",
-        "FTSE 100 (Royaume-Uni)": "^FTSE",
-        "IBEX 35 (Espagne)": "^IBEX",
-        "FTSE MIB (Italie)": "FTSEMIB.MI",
-        "AEX (Pays-Bas)": "^AEX",
-        "SMI (Suisse)": "^SSMI",
-        "Nikkei 225 (Japon)": "^N225",
-        "TOPIX (Japon)": "^TOPX",
-        "Hang Seng (Hong Kong)": "^HSI",
-        "Shanghai Composite (Chine)": "000030.SS",
-        "CSI 300 (Chine)": "000300.SS",
-        "Nifty 50 (Inde)": "^NSEI",
-        "BSE Sensex (Inde)": "^BSESN",
-        "ASX 200 (Australie)": "^AXJO",
-        "IBOVESPA (Brésil)": "^BVSP",
-        "IPC Mexico (Mexique)": "^MXX",
-        "FTSE JSE Top 40 (Afrique du Sud)": "^J200.JO",
-        "JSX Composite (Indonésie)": "^JKSE",
-        "STI (Singapour)": "^STI"
+        "S&P 500 (USA)": "^GSPC", "Nasdaq 100 (USA)": "^IXIC", "Dow Jones Industrial Average (USA)": "^DJI",
+        "Russell 2000 (USA)": "^RUT", "CAC 40 (France)": "^FCHI", "DAX 40 (Allemagne)": "^GDAXI",
+        "Euro Stoxx 50 (Europe)": "^STOXX50E", "FTSE 100 (Royaume-Uni)": "^FTSE", "IBEX 35 (Espagne)": "^IBEX",
+        "FTSE MIB (Italie)": "FTSEMIB.MI", "AEX (Pays-Bas)": "^AEX", "SMI (Suisse)": "^SSMI",
+        "Nikkei 225 (Japon)": "^N225", "TOPIX (Japon)": "^TOPX", "Hang Seng (Hong Kong)": "^HSI",
+        "Shanghai Composite (Chine)": "000030.SS", "CSI 300 (Chine)": "000300.SS", "Nifty 50 (Inde)": "^NSEI",
+        "BSE Sensex (Inde)": "^BSESN", "ASX 200 (Australie)": "^AXJO", "IBOVESPA (Brésil)": "^BVSP",
+        "IPC Mexico (Mexique)": "^MXX", "FTSE JSE Top 40 (Afrique du Sud)": "^J200.JO", "JSX Composite (Indonésie)": "^JKSE", "STI (Singapour)": "^STI"
     },
     "🛢️ Matières Premières": {
-        "Pétrole Brent": "BZ=F",
-        "Pétrole WTI (Light Crude)": "CL=F",
-        "Or (Gold)": "GC=F",
-        "Argent (Silver)": "SI=F",
-        "Cuivre (Copper)": "HG=F",
-        "Platinium": "PL=F",
-        "Palladium": "PA=F",
-        "Gaz Naturel (Natural Gas)": "NG=F",
-        "Blé (Wheat)": "ZW=F",
-        "Maïs (Corn)": "ZC=F",
-        "Soja (Soybean)": "ZS=F",
-        "Café (Coffee)": "KC=F",
-        "Sucre (Sugar)": "SB=F",
-        "Cacao (Cocoa)": "CC=F",
-        "Coton (Cotton)": "CT=F",
-        "Aluminium": "ALI=F",
-        "Zinc": "ZNC=F",
-        "Nickel": "NIC=F",
-        "Bétail Vivant (Live Cattle)": "LE=F",
-        "Porc Maigre (Lean Hogs)": "HE=F",
-        "Avoine (Oats)": "ZO=F",
-        "Riz (Rough Rice)": "ZR=F",
-        "Essence RBOB (Gasoline)": "RB=F",
-        "Fioul Domestique (Heating Oil)": "HO=F",
-        "Fer (Iron Ore)": "TIO=F"
+        "Pétrole Brent": "BZ=F", "Pétrole WTI (Light Crude)": "CL=F", "Or (Gold)": "GC=F",
+        "Argent (Silver)": "SI=F", "Cuivre (Copper)": "HG=F", "Platinium": "PL=F", "Palladium": "PA=F",
+        "Gaz Naturel (Natural Gas)": "NG=F", "Blé (Wheat)": "ZW=F", "Maïs (Corn)": "ZC=F", "Soja (Soybean)": "ZS=F",
+        "Café (Coffee)": "KC=F", "Sucre (Sugar)": "SB=F", "Cacao (Cocoa)": "CC=F", "Coton (Cotton)": "CT=F",
+        "Aluminium": "ALI=F", "Zinc": "ZNC=F", "Nickel": "NIC=F", "Bétail Vivant (Live Cattle)": "LE=F",
+        "Porc Maigre (Lean Hogs)": "HE=F", "Avoine (Oats)": "ZO=F", "Riz (Rough Rice)": "ZR=F",
+        "Essence RBOB (Gasoline)": "RB=F", "Fioul Domestique (Heating Oil)": "HO=F", "Fer (Iron Ore)": "TIO=F"
     },
     "💱 Forex (Devises)": {
-        "EUR/USD": "EURUSD=X",
-        "GBP/USD": "GBPUSD=X",
-        "USD/JPY": "USDJPY=X",
-        "USD/CHF": "USDCHF=X",
-        "AUD/USD": "AUDUSD=X",
-        "USD/CAD": "USDCAD=X",
-        "NZD/USD": "NZDUSD=X",
-        "EUR/GBP": "EURGBP=X",
-        "EUR/JPY": "EURJPY=X",
-        "GBP/JPY": "GBPJPY=X",
-        "EUR/CHF": "EURCHF=X",
-        "AUD/JPY": "AUDJPY=X",
-        "EUR/AUD": "EURAUD=X",
-        "EUR/CAD": "EURCAD=X",
-        "GBP/CHF": "GBPCHF=X",
-        "CHF/JPY": "CHFJPY=X",
-        "NZD/JPY": "NZDJPY=X",
-        "AUD/CAD": "AUDCAD=X",
-        "AUD/NZD": "AUDNZD=X",
-        "CAD/JPY": "CADJPY=X",
-        "USD/ZAR": "USDZAR=X",
-        "USD/MXN": "USDMXN=X",
-        "USD/TRY": "USDTRY=X",
-        "USD/BRL": "USDBRL=X",
-        "USD/SEK": "USDSEK=X"
+        "EUR/USD": "EURUSD=X", "GBP/USD": "GBPUSD=X", "USD/JPY": "USDJPY=X", "USD/CHF": "USDCHF=X",
+        "AUD/USD": "AUDUSD=X", "USD/CAD": "USDCAD=X", "NZD/USD": "NZDUSD=X", "EUR/GBP": "EURGBP=X",
+        "EUR/JPY": "EURJPY=X", "GBP/JPY": "GBPJPY=X", "EUR/CHF": "EURCHF=X", "AUD/JPY": "AUDJPY=X",
+        "EUR/AUD": "EURAUD=X", "EUR/CAD": "EURCAD=X", "GBP/CHF": "GBPCHF=X", "CHF/JPY": "CHFJPY=X",
+        "NZD/JPY": "NZDJPY=X", "AUD/CAD": "AUDCAD=X", "AUD/NZD": "AUDNZD=X", "CAD/JPY": "CADJPY=X",
+        "USD/ZAR": "USDZAR=X", "USD/MXN": "USDMXN=X", "USD/TRY": "USDTRY=X", "USD/BRL": "USDBRL=X", "USD/SEK": "USDSEK=X"
     },
     "🪙 Cryptomonnaies": {
-        "Bitcoin (BTC/USD)": "BTC-USD",
-        "Ethereum (ETH/USD)": "ETH-USD",
-        "Solana (SOL-USD)": "SOL-USD",
-        "Binance Coin (BNB/USD)": "BNB-USD",
-        "Ripple (XRP/USD)": "XRP-USD",
-        "Cardano (ADA/USD)": "ADA-USD",
-        "Dogecoin (DOGE/USD)": "DOGE-USD",
-        "Avalanche (AVAX/USD)": "AVAX-USD",
-        "Chainlink (LINK/USD)": "LINK-USD",
-        "Polkadot (DOT/USD)": "DOT-USD",
-        "Polygon (POL/USD)": "POL-USD",
-        "Tron (TRX/USD)": "TRX-USD",
-        "Shiba Inu (SHIB/USD)": "SHIB-USD",
-        "Litecoin (LTC/USD)": "LTC-USD",
-        "Uniswap (UNI/USD)": "UNI-USD",
-        "Cosmos (ATOM/USD)": "ATOM-USD",
-        "Monero (XMR/USD)": "XMR-USD",
-        "Stellar (XLM/USD)": "XLM-USD",
-        "Near Protocol (NEAR/USD)": "NEAR-USD",
-        "Render (RENDER/USD)": "RENDER-USD",
-        "Sui (SUI/USD)": "SUI-USD",
-        "Aptos (APT/USD)": "APT-USD",
-        "Arbitrum (ARB/USD)": "ARB-USD",
-        "Pepe (PEPE/USD)": "PEPE-USD",
-        "Toncoin (TON/USD)": "TON-USD"
+        "Bitcoin (BTC/USD)": "BTC-USD", "Ethereum (ETH/USD)": "ETH-USD", "Solana (SOL-USD)": "SOL-USD",
+        "Binance Coin (BNB/USD)": "BNB-USD", "Ripple (XRP/USD)": "XRP-USD", "Cardano (ADA/USD)": "ADA-USD",
+        "Dogecoin (DOGE/USD)": "DOGE-USD", "Avalanche (AVAX/USD)": "AVAX-USD", "Chainlink (LINK/USD)": "LINK-USD",
+        "Polkadot (DOT/USD)": "DOT-USD", "Polygon (POL/USD)": "POL-USD", "Tron (TRX/USD)": "TRX-USD",
+        "Shiba Inu (SHIB/USD)": "SHIB-USD", "Litecoin (LTC/USD)": "LTC-USD", "Uniswap (UNI/USD)": "UNI-USD",
+        "Cosmos (ATOM/USD)": "ATOM-USD", "Monero (XMR/USD)": "XMR-USD", "Stellar (XLM/USD)": "XLM-USD",
+        "Near Protocol (NEAR/USD)": "NEAR-USD", "Render (RENDER/USD)": "RENDER-USD", "Sui (SUI/USD)": "SUI-USD",
+        "Aptos (APT/USD)": "APT-USD", "Arbitrum (ARB/USD)": "ARB-USD", "Pepe (PEPE/USD)": "PEPE-USD", "Toncoin (TON/USD)": "TON-USD"
     }
 }
 
@@ -305,7 +185,7 @@ def get_recent_news(ticker_str):
         return ["Actualités non disponibles."]
 
 # ---------------------------------------------------------
-# Graphique interactif Plotly avec bougies pleines & flèches
+# Graphique interactif Plotly
 # ---------------------------------------------------------
 def draw_interactive_chart(df, pivot, r1, r2, s1, s2, asset_name, timeframe, zoom_36h=False):
     df_plot = df.copy()
@@ -382,7 +262,7 @@ if "current_analysis" not in st.session_state:
     st.session_state.current_analysis = None
 
 # ---------------------------------------------------------
-# Barre latérale : Sélection globale & Paramètres de Position
+# Barre latérale : Sélection & Paramètres de Position Précis
 # ---------------------------------------------------------
 st.sidebar.header("1. Sélection de l'Actif")
 
@@ -522,14 +402,34 @@ if st.session_state.active_tab == "new":
                 if current_price <= s1 or current_price >= r1: confluence_score += 20
                 confluence_score = min(98, max(15, confluence_score))
 
+                # --- CALCULS FINANCIERS PRÉCIS EN EUROS ---
+                # Distance SL standard (1.5 * ATR) et TP (2x le risque)
+                sl_distance_price = 1.5 * atr_val
+                tp1_distance_price = 3.0 * atr_val
+                tp2_distance_price = 4.5 * atr_val
+
+                # Conversion en pips / points estimés par rapport au prix (supposons 1 point = unité de prix ou pip standard)
+                # Coût du spread en valeur monétaire (€) = spread_value * pip_value * trade_volume
+                spread_cost_eur = spread_value * pip_value * trade_volume
+
+                # Pour le scénario LONG :
+                risk_eur_long = (sl_distance_price * trade_volume * pip_value) + spread_cost_eur
+                tp1_eur_long = (tp1_distance_price * trade_volume * pip_value) - spread_cost_eur
+                tp2_eur_long = (tp2_distance_price * trade_volume * pip_value) - spread_cost_eur
+
+                # Pour le scénario SHORT :
+                risk_eur_short = (sl_distance_price * trade_volume * pip_value) + spread_cost_eur
+                tp1_eur_short = (tp1_distance_price * trade_volume * pip_value) - spread_cost_eur
+                tp2_eur_short = (tp2_distance_price * trade_volume * pip_value) - spread_cost_eur
+
                 prompt = f"""
                 Tu es un comité d'investissement et un algorithme de trading institutionnel expert.
                 Analyse l'actif **{selected_asset_name} ({ticker_symbol})** en unité de temps **{selected_timeframe}**.
 
                 ### PARAMÈTRES DE POSITION DE L'UTILISATEUR :
                 - Volume engagé : {trade_volume:.2f} lots/unités
-                - Valeur du Spread : {spread_value:.1f} pips/pts
-                - Valeur du Pip : {pip_value:.2f} par unité
+                - Valeur du Spread : {spread_value:.1f} pips/pts (Coût fixe estimé : {spread_cost_eur:.2f} €)
+                - Valeur du Pip : {pip_value:.2f} €
 
                 ### DONNÉES TECHNIQUES & QUANTITATIVES :
                 - Prix actuel : {current_price:.2f}
@@ -547,8 +447,7 @@ if st.session_state.active_tab == "new":
 
                 ### 1. 📰 ANALYSE FONDAMENTALE ET MACROÉCONOMIQUE
                 - Présentation de la santé fondamentale globale de l'actif / secteur / marché.
-                - Synthèse et impact des dernières actualités majeures sur le cours à court/moyen terme (Haussier, Baisse, Neutre).
-                - Facteurs de risque macroéconomiques ou catalyseurs majeurs à surveiller.
+                - Synthèse et impact des dernières actualités majeures sur le cours à court/moyen terme.
 
                 ---
 
@@ -558,14 +457,12 @@ if st.session_state.active_tab == "new":
                 ---
 
                 ### 3. 📊 ANALYSE TECHNIQUE & SCORE DE CONFLUENCE ({confluence_score}%)
-                - Interprétation des indicateurs (RSI, ATR, Bollinger) et des niveaux Fibonacci (S1/S2, R1/R2).
+                - Interprétation des indicateurs (RSI, ATR, Bollinger) et des niveaux Fibonacci.
 
                 ---
 
-                ### 4. 🎯 PLAN DE TRADE & GAINS/PERTES ESTIMÉS (Basé sur Volume {trade_volume:.2f} et Pip {pip_value:.2f})
-                - Recommandation claire (LONG / SHORT / WAIT).
-                - Point d'entrée recommandé, Stop Loss dynamique, Take Profits.
-                - Calcul précis des gains potentiels (Take Profit 1 & 2) et des pertes potentielles (Stop Loss) en tenant compte du volume engagé, du spread ({spread_value}) et de la valeur du pip.
+                ### 4. 🎯 PLAN DE TRADE & STRATÉGIE
+                - Recommandation claire (LONG / SHORT / WAIT) avec justification technique et niveaux clés d'entrée, SL et TP.
                 """
 
                 with st.spinner("Génération du rapport par l'IA..."):
@@ -584,6 +481,9 @@ if st.session_state.active_tab == "new":
                     "trade_volume": trade_volume,
                     "spread_value": spread_value,
                     "pip_value": pip_value,
+                    "risk_eur": risk_eur_long,
+                    "tp1_eur": tp1_eur_long,
+                    "tp2_eur": tp2_eur_long,
                     "report": ai_text,
                     "df": df,
                     "pivot": pivot,
@@ -600,10 +500,26 @@ if st.session_state.active_tab == "new":
         st.markdown(f"## 📊 Rapport Institutionnel : {ca['asset']} ({ca['tf']}) — {ca['timestamp']}")
         
         m1, m2, m3, m4 = st.columns(4)
-        with m1: st.metric("Tendance Daily (MTF)", ca['mtf_trend'])
-        with m2: st.metric("Score de Confluence", f"{ca['confluence']}%")
-        with m3: st.metric("Volume Engagé", f"{ca['trade_volume']:.2f} lots")
-        with m4: st.metric("Valeur du Pip", f"{ca['pip_value']:.2f} €")
+        with m1: st.metric("Tendance Daily", ca['mtf_trend'])
+        with m2: st.metric("Confluence", f"{ca['confluence']}%")
+        with m3: st.metric("Risque Max (Perte SL)", f"-{ca['risk_eur']:.2f} €", delta_color="inverse")
+        with m4: st.metric("Gain Potentiel (TP1)", f"+{ca['tp1_eur']:.2f} €", delta_color="normal")
+
+        # Section simplifiée et claire des calculs financiers précis en Euros
+        st.markdown("### 💰 Calculs financiers précis (Gains / Pertes en €)")
+        col_calc1, col_calc2 = st.columns(2)
+        with col_calc1:
+            st.markdown(f"""
+            * **Volume engagé :** `{ca['trade_volume']:.2f} lots/unités`
+            * **Valeur du Pip :** `{ca['pip_value']:.2f} €`
+            * **Spread appliqué :** `{ca['spread_value']:.1f} pips/pts`
+            """)
+        with col_calc2:
+            st.markdown(f"""
+            * **Perte maximale estimée (Stop Loss) :** `🔴 -{ca['risk_eur']:.2f} €` (frais de spread inclus)
+            * **Gain potentiel cible 1 (TP1) :** `🟢 +{ca['tp1_eur']:.2f} €`
+            * **Gain potentiel cible 2 (TP2) :** `🟢 +{ca['tp2_eur']:.2f} €`
+            """)
 
         fig_interactive = draw_interactive_chart(ca['df'], ca['pivot'], ca['r1'], ca['r2'], ca['s1'], ca['s2'], ca['asset'], ca['tf'], zoom_36h=ca['zoom_36h'])
         st.plotly_chart(fig_interactive, use_container_width=True)
@@ -630,7 +546,7 @@ if st.session_state.active_tab == "new":
                 st.session_state.current_analysis = None
                 st.rerun()
         with col_save2:
-            st.info("💡 Cliquez sur le bouton ci-contre pour conserver cette analyse dans votre historique et accéder au suivi de position ainsi qu'au chat Gemini associé.")
+            st.info("💡 Cliquez pour archiver l'analyse dans votre historique et accéder au suivi de position et au chat Gemini.")
 
 else:
     entry = next((item for item in st.session_state.trade_history if item['id'] == st.session_state.active_tab), None)
@@ -645,9 +561,24 @@ else:
         
         m1, m2, m3, m4 = st.columns(4)
         with m1: st.metric("Tendance Daily", entry['mtf_trend'])
-        with m2: st.metric("Score Confluence", f"{entry['confluence']}%")
-        with m3: st.metric("Volume", f"{entry['trade_volume']:.2f}")
-        with m4: st.metric("Valeur Pip", f"{entry['pip_value']:.2f}")
+        with m2: st.metric("Confluence", f"{entry['confluence']}%")
+        with m3: st.metric("Risque SL", f"-{entry['risk_eur']:.2f} €")
+        with m4: st.metric("Gain TP1", f"+{entry['tp1_eur']:.2f} €")
+
+        st.markdown("### 💰 Calculs financiers précis (Gains / Pertes en €)")
+        col_calc1, col_calc2 = st.columns(2)
+        with col_calc1:
+            st.markdown(f"""
+            * **Volume engagé :** `{entry['trade_volume']:.2f} lots/unités`
+            * **Valeur du Pip :** `{entry['pip_value']:.2f} €`
+            * **Spread appliqué :** `{entry['spread_value']:.1f} pips/pts`
+            """)
+        with col_calc2:
+            st.markdown(f"""
+            * **Perte maximale estimée (Stop Loss) :** `🔴 -{entry['risk_eur']:.2f} €`
+            * **Gain potentiel cible 1 (TP1) :** `🟢 +{entry['tp1_eur']:.2f} €`
+            * **Gain potentiel cible 2 (TP2) :** `🟢 +{entry['tp2_eur']:.2f} €`
+            """)
 
         fig_interactive = draw_interactive_chart(entry['df'], entry['pivot'], entry['r1'], entry['r2'], entry['s1'], entry['s2'], entry['asset'], entry['tf'], zoom_36h=entry['zoom_36h'])
         st.plotly_chart(fig_interactive, use_container_width=True)
