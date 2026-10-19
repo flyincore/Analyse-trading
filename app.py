@@ -41,7 +41,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("🎯 Bot d'Analyse Trading Pro — Suite Institutionnelle")
-st.markdown("Analyse multi-timeframe, score de confluence, gestion des risques ATR, catalogue mondial complet et journal de trading.")
+st.markdown("Analyse technique & fondamentale, multi-timeframe, score de confluence, gestion des risques ATR, catalogue mondial complet et journal de trading.")
 
 # ---------------------------------------------------------
 # Liste des clés API Gemini (Système de rotation / Fallback)
@@ -374,7 +374,7 @@ def draw_interactive_chart(df, pivot, r1, r2, s1, s2, asset_name, timeframe, zoo
     )
     return fig
 
-# Initialisation des états de session
+# Initialisation des états de session persistent
 if "trade_history" not in st.session_state:
     st.session_state.trade_history = []
 if "active_tab" not in st.session_state:
@@ -460,7 +460,7 @@ if st.session_state.active_tab == "new":
     if run_analysis:
         tf_info = TIMEFRAME_MAPPING[selected_timeframe]
         
-        with st.spinner(f"Analyse multi-timeframe et calcul des indicateurs pour {selected_asset_name}..."):
+        with st.spinner(f"Analyse globale & extraction fondamentale pour {selected_asset_name}..."):
             df = load_market_data(ticker_symbol, tf_info["period"], tf_info["interval"])
             df_daily = load_market_data(ticker_symbol, "6m", "1d")
             
@@ -539,27 +539,34 @@ if st.session_state.active_tab == "new":
                 - MM 50 : {mm50:.2f}
                 - **POINTS DE PIVOT FIBONACCI :** R2={r2:.2f}, R1={r1:.2f}, Pivot={pivot:.2f}, S1={s1:.2f}, S2={s2:.2f}
 
-                ### ACTUALITÉS ET MACRO :
+                ### ACTUALITÉS ET FLUX D'INFORMATIONS RÉCENTS :
                 {news_text}
 
                 Fournis un rapport complet structuré STRICTEMENT ainsi :
 
-                ### 1. 🌐 FILTRE MACRO & TENDANCE MULTI-TIMEFRAME
-                - Analyse de la cohérence entre le flux d'actualité et la tendance de fond Daily ({mtf_trend}).
+                ### 1. 📰 ANALYSE FONDAMENTALE ET MACROÉCONOMIQUE
+                - Présentation de la santé fondamentale globale de l'actif / secteur / marché.
+                - Synthèse et impact des dernières actualités majeures sur le cours à court/moyen terme (Haussier, Baisse, Neutre).
+                - Facteurs de risque macroéconomiques ou catalyseurs majeurs à surveiller.
 
                 ---
 
-                ### 2. 📊 ANALYSE TECHNIQUE & SCORE DE CONFLUENCE ({confluence_score}%)
-                - Interprétation des indicateurs (RSI, ATR, Bollinger) et des niveaux Fibonacci.
+                ### 2. 🌐 FILTRE MACRO & TENDANCE MULTI-TIMEFRAME
+                - Analyse de la cohérence entre les fondamentaux et la tendance de fond Daily ({mtf_trend}).
 
                 ---
 
-                ### 3. 🎯 PLAN DE TRADE INSTITUTIONNEL
+                ### 3. 📊 ANALYSE TECHNIQUE & SCORE DE CONFLUENCE ({confluence_score}%)
+                - Interprétation des indicateurs (RSI, ATR, Bollinger) et des niveaux Fibonacci (S1/S2, R1/R2).
+
+                ---
+
+                ### 4. 🎯 PLAN DE TRADE INSTITUTIONNEL
                 - Recommandation claire (LONG / SHORT / WAIT).
-                - Point d'entrée, Stop Loss dynamique (basé sur ATR), et Take Profits (R/R 1:2 minimum).
+                - Point d'entrée recommandé, Stop Loss dynamique (basé sur ATR), et Take Profits (R/R 1:2 minimum).
                 """
 
-                with st.spinner("Génération du rapport institutionnel par l'IA..."):
+                with st.spinner("Génération du rapport par l'IA..."):
                     ai_text = generate_ai_report(prompt)
 
                 timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -600,12 +607,12 @@ if st.session_state.active_tab == "new":
         st.plotly_chart(fig_interactive, use_container_width=True)
 
         st.markdown("---")
-        with st.expander("📰 Voir le flux d'actualités et filtre macro", expanded=False):
+        with st.expander("📰 Voir les flux d'actualités et filtre macro", expanded=False):
             for headline in ca['news']:
                 st.write(headline)
 
         st.markdown("---")
-        st.markdown("### 📋 Synthèse et Plan Stratégique")
+        st.markdown("### 📋 Synthèse Fondamentale & Plan Stratégique")
         st.markdown(ca['report'])
 
         st.markdown("---")
@@ -615,13 +622,14 @@ if st.session_state.active_tab == "new":
                 new_id = (max([item['id'] for item in st.session_state.trade_history]) + 1) if st.session_state.trade_history else 1
                 ca_to_save = ca.copy()
                 ca_to_save['id'] = new_id
+                
+                # Ajout direct et verrouillé à l'historique persistent
                 st.session_state.trade_history.append(ca_to_save)
                 st.session_state.active_tab = new_id
                 st.session_state.current_analysis = None
-                st.success("Analyse enregistrée avec succès !")
                 st.rerun()
         with col_save2:
-            st.info("💡 Cliquez pour archiver l'analyse, suivre votre position et échanger avec le module IA.")
+            st.info("💡 Cliquez sur le bouton ci-contre pour conserver cette analyse dans votre historique et accéder au suivi de position ainsi qu'au chat Gemini associé.")
 
 else:
     entry = next((item for item in st.session_state.trade_history if item['id'] == st.session_state.active_tab), None)
@@ -643,7 +651,7 @@ else:
         st.plotly_chart(fig_interactive, use_container_width=True)
 
         st.markdown("---")
-        st.markdown("### 📊 Rapport d'Analyse")
+        st.markdown("### 📊 Rapport d'Analyse Complete")
         st.markdown(entry['report'])
 
         st.markdown("---")
@@ -671,7 +679,7 @@ else:
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
 
-        if user_query := st.chat_input("Ex: Dois-je sécuriser mes profits à mi-chemin ?", key=f"chat_input_{entry['id']}"):
+        if user_query := st.chat_input("Ex: Quel est le risque fondamental si la banque centrale augmente ses taux ?", key=f"chat_input_{entry['id']}"):
             st.session_state[chat_key].append({"role": "user", "content": user_query})
             with st.chat_message("user"): st.markdown(user_query)
 
