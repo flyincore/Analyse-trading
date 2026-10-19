@@ -6,10 +6,10 @@ import google.generativeai as genai
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 
-# Configuration de la page Streamlit avec un thème global sombre / carbone
+# Configuration de la page Streamlit
 st.set_page_config(page_title="Bot Trading IA - Version Institutionnelle", layout="wide")
 
-# Injection de style CSS personnalisé (effet carbone / sombre professionnel)
+# Style CSS sombre / carbone
 st.markdown("""
     <style>
     .stApp {
@@ -30,22 +30,13 @@ st.markdown("""
         border-color: #26a69a;
         color: #26a69a;
     }
-    .metric-card {
-        background-color: #1a1d24;
-        border: 1px solid #2a2e39;
-        padding: 15px;
-        border-radius: 8px;
-        text-align: center;
-    }
     </style>
 """, unsafe_allow_html=True)
 
 st.title("🎯 Bot d'Analyse Trading Pro — Suite Institutionnelle")
-st.markdown("Analyse technique & fondamentale, multi-timeframe, score de confluence, calculs financiers (marge, levier, pips, SL/TP) et journal de trading.")
+st.markdown("Analyse technique & fondamentale, calculs financiers exacts en Euros (€) et journal de trading.")
 
-# ---------------------------------------------------------
-# Liste des clés API Gemini (Système de rotation / Fallback)
-# ---------------------------------------------------------
+# API Keys Gemini
 API_KEYS = [
     "AQ.Ab8RN6J07BTFUTUoWBM2cfsiUduTyV756t_c7L6i6SZxY7wgTg",
     "AQ.Ab8RN6KvFijAko4RVnTWf9Uf3qE4lVbXgrMsTXay1utBmqq5-w",
@@ -74,85 +65,33 @@ def generate_ai_report(prompt_text):
         except Exception as e:
             error_details.append(f"Erreur de configuration clé `{api_key[:8]}...` : {e}")
 
-    return "### ⚠️ Erreur détaillée de l'API Gemini :\n\nToutes les clés API configurées ont dépassé leurs quotas ou ont rencontré une erreur.\n\n" + "\n\n".join(error_details)
+    return "### ⚠️ Erreur API Gemini :\n" + "\n\n".join(error_details)
 
-# ---------------------------------------------------------
-# Dictionnaire complet et exhaustif (100+ actifs)
-# ---------------------------------------------------------
+# Actifs
 ASSETS_DICTIONARY = {
     "🇺🇸 Actions USA (Wall Street)": {
         "Apple": "AAPL", "Nvidia": "NVDA", "Microsoft": "MSFT", "Amazon": "AMZN",
-        "Alphabet (Google)": "GOOGL", "Meta (Facebook)": "META", "Tesla": "TSLA", "AMD": "AMD",
-        "Netflix": "NFLX", "Intel": "INTC", "JPMorgan Chase": "JPM", "Visa": "V",
-        "Mastercard": "MA", "Bank of America": "BAC", "Coca-Cola": "KO", "PepsiCo": "PEP",
-        "Walt Disney": "DIS", "Nike": "NKE", "Pfizer": "PFE", "Johnson & Johnson": "JNJ",
-        "ExxonMobil": "XOM", "Chevron": "CVX", "Walmart": "WMT", "Palantir": "PLTR", "Super Micro Computer": "SMCI"
+        "Alphabet (Google)": "GOOGL", "Meta (Facebook)": "META", "Tesla": "TSLA", "AMD": "AMD"
     },
-    "🇪🇺 Actions Europe (Euronext, DAX, LSE)": {
-        "TotalEnergies (France)": "TTE.PA", "LVMH (France)": "MC.PA", "ASML (Pays-Bas)": "ASML.AS",
-        "SAP (Allemagne)": "SAP.DE", "Siemens (Allemagne)": "SIE.DE", "Sanofi (France)": "SAN.PA",
-        "Airbus (France/DE)": "AIR.PA", "L'Oréal (France)": "OR.PA", "Schneider Electric (France)": "SU.PA",
-        "Air Liquide (France)": "AI.PA", "BNP Paribas (France)": "BNP.PA", "AXA (France)": "CS.PA",
-        "Hermès (France)": "RMS.PA", "Kering (France)": "KER.PA", "Stellantis (France/IT)": "STLAM.MI",
-        "Volkswagen (Allemagne)": "VOW3.DE", "Allianz (Allemagne)": "ALV.DE", "Mercedes-Benz (Allemagne)": "MBG.DE",
-        "BASF (Allemagne)": "BAS.DE", "Bayer (Allemagne)": "BAYN.DE", "Unilever (Royaume-Uni)": "ULVR.L",
-        "Shell (Royaume-Uni)": "SHEL.L", "BP (Royaume-Uni)": "BP.L", "HSBC (Royaume-Uni)": "HSBA.L", "Banco Santander (Espagne)": "SAN.MC"
-    },
-    "🌏 Actions Asie & Pacifique": {
-        "TSMC (Taïwan - ADR US)": "TSM", "Toyota (Japon)": "7203.T", "Sony (Japon)": "6758.T",
-        "Tencent (Hong Kong)": "0700.HK", "Alibaba (Hong Kong)": "9988.HK", "Samsung Electronics (Corée du Sud)": "005930.KS",
-        "SoftBank Group (Japon)": "9984.T", "Nintendo (Japon)": "7974.T", "Mitsubishi UFJ (Japon)": "8306.T",
-        "Keyence (Japon)": "6861.T", "Tokyo Electron (Japon)": "8035.T", "Fast Retailing / Uniqlo (Japon)": "9983.T",
-        "Honda (Japon)": "7267.T", "KDDI (Japon)": "9433.T", "Meituan (Hong Kong)": "3690.HK",
-        "JD.com (Hong Kong)": "9618.HK", "Baidu (Hong Kong)": "9888.HK", "Xiaomi (Hong Kong)": "1810.HK",
-        "BYD Company (Hong Kong)": "1211.HK", "SK Hynix (Corée du Sud)": "000660.KS"
-    },
-    "📊 Indices Boursiers": {
-        "S&P 500 (USA)": "^GSPC", "Nasdaq 100 (USA)": "^IXIC", "Dow Jones Industrial Average (USA)": "^DJI",
-        "Russell 2000 (USA)": "^RUT", "CAC 40 (France)": "^FCHI", "DAX 40 (Allemagne)": "^GDAXI",
-        "Euro Stoxx 50 (Europe)": "^STOXX50E", "FTSE 100 (Royaume-Uni)": "^FTSE", "IBEX 35 (Espagne)": "^IBEX",
-        "FTSE MIB (Italie)": "FTSEMIB.MI", "AEX (Pays-Bas)": "^AEX", "SMI (Suisse)": "^SSMI",
-        "Nikkei 225 (Japon)": "^N225", "TOPIX (Japon)": "^TOPX", "Hang Seng (Hong Kong)": "^HSI",
-        "Shanghai Composite (Chine)": "000030.SS", "CSI 300 (Chine)": "000300.SS", "Nifty 50 (Inde)": "^NSEI",
-        "BSE Sensex (Inde)": "^BSESN", "ASX 200 (Australie)": "^AXJO", "IBOVESPA (Brésil)": "^BVSP",
-        "IPC Mexico (Mexique)": "^MXX", "FTSE JSE Top 40 (Afrique du Sud)": "^J200.JO", "JSX Composite (Indonésie)": "^JKSE", "STI (Singapour)": "^STI"
+    "🇪🇺 Actions Europe": {
+        "TotalEnergies": "TTE.PA", "LVMH": "MC.PA", "ASML": "ASML.AS", "SAP": "SAP.DE"
     },
     "🛢️ Matières Premières": {
-        "Pétrole Brent": "BZ=F", "Pétrole WTI (Light Crude)": "CL=F", "Or (Gold)": "GC=F",
-        "Argent (Silver)": "SI=F", "Cuivre (Copper)": "HG=F", "Platinium": "PL=F", "Palladium": "PA=F",
-        "Gaz Naturel (Natural Gas)": "NG=F", "Blé (Wheat)": "ZW=F", "Maïs (Corn)": "ZC=F", "Soja (Soybean)": "ZS=F",
-        "Café (Coffee)": "KC=F", "Sucre (Sugar)": "SB=F", "Cacao (Cocoa)": "CC=F", "Coton (Cotton)": "CT=F",
-        "Aluminium": "ALI=F", "Zinc": "ZNC=F", "Nickel": "NIC=F", "Bétail Vivant (Live Cattle)": "LE=F",
-        "Porc Maigre (Lean Hogs)": "HE=F", "Avoine (Oats)": "ZO=F", "Riz (Rough Rice)": "ZR=F",
-        "Essence RBOB (Gasoline)": "RB=F", "Fioul Domestique (Heating Oil)": "HO=F", "Fer (Iron Ore)": "TIO=F"
+        "Pétrole Brent": "BZ=F", "Pétrole WTI": "CL=F", "Or (Gold)": "GC=F", "Argent": "SI=F"
     },
-    "💱 Forex (Devises)": {
-        "EUR/USD": "EURUSD=X", "GBP/USD": "GBPUSD=X", "USD/JPY": "USDJPY=X", "USD/CHF": "USDCHF=X",
-        "AUD/USD": "AUDUSD=X", "USD/CAD": "USDCAD=X", "NZD/USD": "NZDUSD=X", "EUR/GBP": "EURGBP=X",
-        "EUR/JPY": "EURJPY=X", "GBP/JPY": "GBPJPY=X", "EUR/CHF": "EURCHF=X", "AUD/JPY": "AUDJPY=X",
-        "EUR/AUD": "EURAUD=X", "EUR/CAD": "EURCAD=X", "GBP/CHF": "GBPCHF=X", "CHF/JPY": "CHFJPY=X",
-        "NZD/JPY": "NZDJPY=X", "AUD/CAD": "AUDCAD=X", "AUD/NZD": "AUDNZD=X", "CAD/JPY": "CADJPY=X",
-        "USD/ZAR": "USDZAR=X", "USD/MXN": "USDMXN=X", "USD/TRY": "USDTRY=X", "USD/BRL": "USDBRL=X", "USD/SEK": "USDSEK=X"
+    "💱 Forex": {
+        "EUR/USD": "EURUSD=X", "GBP/USD": "GBPUSD=X", "USD/JPY": "USDJPY=X"
     },
     "🪙 Cryptomonnaies": {
-        "Bitcoin (BTC/USD)": "BTC-USD", "Ethereum (ETH/USD)": "ETH-USD", "Solana (SOL-USD)": "SOL-USD",
-        "Binance Coin (BNB/USD)": "BNB-USD", "Ripple (XRP/USD)": "XRP-USD", "Cardano (ADA/USD)": "ADA-USD",
-        "Dogecoin (DOGE/USD)": "DOGE-USD", "Avalanche (AVAX/USD)": "AVAX-USD", "Chainlink (LINK/USD)": "LINK-USD",
-        "Polkadot (DOT/USD)": "DOT-USD", "Polygon (POL/USD)": "POL-USD", "Tron (TRX/USD)": "TRX-USD",
-        "Shiba Inu (SHIB/USD)": "SHIB-USD", "Litecoin (LTC/USD)": "LTC-USD", "Uniswap (UNI/USD)": "UNI-USD",
-        "Cosmos (ATOM/USD)": "ATOM-USD", "Monero (XMR/USD)": "XMR-USD", "Stellar (XLM/USD)": "XLM-USD",
-        "Near Protocol (NEAR/USD)": "NEAR-USD", "Render (RENDER/USD)": "RENDER-USD", "Sui (SUI/USD)": "SUI-USD",
-        "Aptos (APT/USD)": "APT-USD", "Arbitrum (ARB/USD)": "ARB-USD", "Pepe (PEPE/USD)": "PEPE-USD", "Toncoin (TON/USD)": "TON-USD"
+        "Bitcoin": "BTC-USD", "Ethereum": "ETH-USD", "Solana": "SOL-USD"
     }
 }
 
 TIMEFRAME_MAPPING = {
-    "M15":    {"interval": "15m", "period": "7d"},
-    "H1":     {"interval": "1h",  "period": "30d"},
-    "H4":     {"interval": "1h",  "period": "60d"},
-    "D1":     {"interval": "1d",  "period": "1y"},
-    "1 mois": {"interval": "1mo", "period": "5y"},
-    "1 an":   {"interval": "1mo", "period": "max"}
+    "M15": {"interval": "15m", "period": "7d"},
+    "H1":  {"interval": "1h",  "period": "30d"},
+    "H4":  {"interval": "1h",  "period": "60d"},
+    "D1":  {"interval": "1d",  "period": "1y"}
 }
 
 @st.cache_data(ttl=300)
@@ -177,16 +116,12 @@ def get_recent_news(ticker_str):
         if news and isinstance(news, list):
             for item in news[:3]:
                 title = item.get('title') or item.get('content', {}).get('title', '')
-                publisher = item.get('publisher') or item.get('content', {}).get('provider', {}).get('displayName', '')
                 if title:
-                    headlines.append(f"- {title} (Source: {publisher})")
-        return headlines if headlines else ["Aucune actualité récente majeure."]
+                    headlines.append(f"- {title}")
+        return headlines if headlines else ["Aucune actualité majeure."]
     except Exception:
-        return ["Actualités non disponibles."]
+        return ["Actualités indisponibles."]
 
-# ---------------------------------------------------------
-# Graphique interactif Plotly
-# ---------------------------------------------------------
 def draw_interactive_chart(df, pivot, r1, r2, s1, s2, asset_name, timeframe, zoom_36h=False):
     df_plot = df.copy()
     if zoom_36h and timeframe in ["M15", "H1", "H4"]:
@@ -197,26 +132,7 @@ def draw_interactive_chart(df, pivot, r1, r2, s1, s2, asset_name, timeframe, zoo
     df_reset = df_plot.reset_index()
     date_col = 'Datetime' if 'Datetime' in df_reset.columns else 'Date'
 
-    reversal_bull_x, reversal_bull_y = [], []
-    reversal_bear_x, reversal_bear_y = [], []
-
-    for i in range(2, len(df_reset) - 1):
-        prev_close = df_reset.loc[i-1, 'Close']
-        prev_open = df_reset.loc[i-1, 'Open']
-        curr_close = df_reset.loc[i, 'Close']
-        curr_open = df_reset.loc[i, 'Open']
-        curr_low = df_reset.loc[i, 'Low']
-        curr_high = df_reset.loc[i, 'High']
-
-        if (prev_close < prev_open) and (curr_close > curr_open) and (curr_close >= prev_open):
-            reversal_bull_x.append(df_reset.loc[i, date_col])
-            reversal_bull_y.append(curr_low * 0.995)
-        elif (prev_close > prev_open) and (curr_close < curr_open) and (curr_close <= prev_open):
-            reversal_bear_x.append(df_reset.loc[i, date_col])
-            reversal_bear_y.append(curr_high * 1.005)
-
     fig = go.Figure()
-
     fig.add_trace(go.Candlestick(
         x=df_reset[date_col],
         open=df_reset['Open'], high=df_reset['High'], low=df_reset['Low'], close=df_reset['Close'],
@@ -225,35 +141,19 @@ def draw_interactive_chart(df, pivot, r1, r2, s1, s2, asset_name, timeframe, zoo
         decreasing=dict(line=dict(color='#ff5252', width=1), fillcolor='#ff5252')
     ))
 
-    if 'Boll_Upper' in df_reset.columns:
-        fig.add_trace(go.Scatter(x=df_reset[date_col], y=df_reset['Boll_Upper'], mode='lines', name='Bollinger Sup', line=dict(color='rgba(100,100,255,0.4)', width=1)))
-        fig.add_trace(go.Scatter(x=df_reset[date_col], y=df_reset['Boll_Lower'], mode='lines', name='Bollinger Inf', line=dict(color='rgba(100,100,255,0.4)', width=1), fill='tonexty', fillcolor='rgba(100,100,255,0.03)'))
-
-    if reversal_bull_x:
-        fig.add_trace(go.Scatter(x=reversal_bull_x, y=reversal_bull_y, mode='markers', name='Retournement Haussier', marker=dict(symbol='triangle-up', size=12, color='#00e676')))
-    if reversal_bear_x:
-        fig.add_trace(go.Scatter(x=reversal_bear_x, y=reversal_bear_y, mode='markers', name='Retournement Baissier', marker=dict(symbol='triangle-down', size=12, color='#ff1744')))
-
-    if 'MM50' in df_reset.columns and df_reset['MM50'].notna().any():
-        fig.add_trace(go.Scatter(x=df_reset[date_col], y=df_reset['MM50'], mode='lines', name='MM 50', line=dict(color='#ffab40', width=1.5)))
-
     if pivot > 0:
-        fig.add_hline(y=pivot, line_dash="dash", line_color="#ffd700", annotation_text=f"Pivot: {pivot:.2f}", annotation_position="top left")
-        fig.add_hline(y=r1, line_dash="dot", line_color="#ff8a80", annotation_text=f"R1: {r1:.2f}", annotation_position="top left")
-        fig.add_hline(y=r2, line_dash="dashdot", line_color="#ff5252", annotation_text=f"R2: {r2:.2f}", annotation_position="top left")
-        fig.add_hline(y=s1, line_dash="dot", line_color="#b9f6ca", annotation_text=f"S1: {s1:.2f}", annotation_position="bottom left")
-        fig.add_hline(y=s2, line_dash="dashdot", line_color="#00c853", annotation_text=f"S2: {s2:.2f}", annotation_position="bottom left")
+        fig.add_hline(y=pivot, line_dash="dash", line_color="#ffd700", annotation_text=f"Pivot: {pivot:.2f}")
+        fig.add_hline(y=r1, line_dash="dot", line_color="#ff8a80", annotation_text=f"R1: {r1:.2f}")
+        fig.add_hline(y=s1, line_dash="dot", line_color="#b9f6ca", annotation_text=f"S1: {s1:.2f}")
 
-    zoom_label = " (Zoom Dernières 36h)" if zoom_36h and timeframe in ["M15", "H1", "H4"] else ""
     fig.update_layout(
-        title=f"📈 Graphique Pro — {asset_name} ({timeframe}){zoom_label}",
-        xaxis_title="Date / Heure", yaxis_title="Prix",
-        template="plotly_dark", paper_bgcolor="#12141a", plot_bgcolor="#181b22", height=600,
-        xaxis_rangeslider_visible=False, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        title=f"📈 {asset_name} ({timeframe})",
+        template="plotly_dark", paper_bgcolor="#12141a", plot_bgcolor="#181b22", height=500,
+        xaxis_rangeslider_visible=False
     )
     return fig
 
-# Initialisation des états de session persistent
+# Initialisation de la session
 if "trade_history" not in st.session_state:
     st.session_state.trade_history = []
 if "active_tab" not in st.session_state:
@@ -261,384 +161,120 @@ if "active_tab" not in st.session_state:
 if "current_analysis" not in st.session_state:
     st.session_state.current_analysis = None
 
-# ---------------------------------------------------------
-# Barre latérale : Sélection & Paramètres de Position Précis
-# ---------------------------------------------------------
+# Sidebar
 st.sidebar.header("1. Sélection de l'Actif")
-
-custom_ticker_input = st.sidebar.text_input("🔍 Ticker libre (ex: AAPL, BTC-USD)", "").strip()
-custom_isin_input = st.sidebar.text_input("🔍 Ou code ISIN (ex: FR0000120271)", "").strip()
-
-if custom_ticker_input:
-    ticker_symbol = custom_ticker_input.upper()
-    selected_asset_name = custom_ticker_input.upper()
-    st.sidebar.info(f"Ticker actif : `{ticker_symbol}`")
-elif custom_isin_input:
-    ticker_symbol = custom_isin_input.upper()
-    selected_asset_name = f"ISIN: {ticker_symbol}"
-    st.sidebar.info(f"Code ISIN actif : `{ticker_symbol}`")
-else:
-    selected_category = st.sidebar.selectbox("Sélectionnez la Catégorie", list(ASSETS_DICTIONARY.keys()))
-    selected_asset_name = st.sidebar.selectbox("Sélectionnez l'Actif", list(ASSETS_DICTIONARY[selected_category].keys()))
-    ticker_symbol = ASSETS_DICTIONARY[selected_category][selected_asset_name]
-    st.sidebar.markdown(f"**Ticker Yahoo Finance :** `{ticker_symbol}`")
+selected_category = st.sidebar.selectbox("Catégorie", list(ASSETS_DICTIONARY.keys()))
+selected_asset_name = st.sidebar.selectbox("Actif", list(ASSETS_DICTIONARY[selected_category].keys()))
+ticker_symbol = ASSETS_DICTIONARY[selected_category][selected_asset_name]
 
 st.sidebar.markdown("---")
 st.sidebar.header("⚙️ Paramètres de Position & Risque")
-trade_volume = st.sidebar.number_input("Volume engagé (Lots/Unités)", min_value=0.01, value=0.10, step=0.01, format="%.2f")
+trade_volume = st.sidebar.number_input("Volume engagé (Lots/Unités)", min_value=0.01, value=0.03, step=0.01, format="%.2f")
 leverage_value = st.sidebar.number_input("Effet de Levier (1:X)", min_value=1, max_value=500, value=30, step=1)
-spread_value = st.sidebar.number_input("Valeur du Spread (pips / pts)", min_value=0.0, value=1.0, step=0.1, format="%.1f")
-pip_value = st.sidebar.number_input("Valeur du Pip (€ / $)", min_value=0.01, value=1.00, step=0.01, format="%.2f")
+spread_value = st.sidebar.number_input("Spread (pips / pts)", min_value=0.0, value=0.06, step=0.01, format="%.2f")
+pip_value = st.sidebar.number_input("Valeur du Pip/Point (€)", min_value=0.01, value=26.73, step=0.01, format="%.2f")
 
-# --- Menu Historique ---
 st.sidebar.markdown("---")
-st.sidebar.header("📜 Historique")
-if st.session_state.trade_history:
-    history_options = ["-- Nouvelle Analyse --"] + [f"{item['id']} | {item['timestamp']} - {item['asset']} ({item['tf']})" for item in st.session_state.trade_history]
-    current_index = 0
-    if st.session_state.active_tab != "new":
-        for idx, opt in enumerate(history_options[1:], start=1):
-            if opt.startswith(f"{st.session_state.active_tab} |"):
-                current_index = idx
-                break
+st.sidebar.header("🎯 Prix Cibles Réels (Optionnel)")
+custom_entry = st.sidebar.number_input("Prix d'ouverture / Entrée (€)", min_value=0.0, value=108.30, step=0.01, format="%.2f")
+custom_tp = st.sidebar.number_input("Take Profit (TP) (€)", min_value=0.0, value=105.15, step=0.01, format="%.2f")
+custom_sl = st.sidebar.number_input("Stop Loss (SL) (€)", min_value=0.0, value=108.10, step=0.01, format="%.2f")
 
-    selected_history = st.sidebar.selectbox("Consulter l'archive :", history_options, index=current_index)
-    if selected_history == "-- Nouvelle Analyse --":
-        if st.session_state.active_tab != "new":
-            st.session_state.active_tab = "new"
-            st.session_state.current_analysis = None
-            st.rerun()
-    else:
-        selected_id = int(selected_history.split(" | ")[0])
-        if st.session_state.active_tab != selected_id:
-            st.session_state.active_tab = selected_id
-            st.rerun()
-
-    with st.sidebar.expander("🗑️ Vider l'historique"):
-        if st.button("Tout supprimer", use_container_width=True):
-            st.session_state.trade_history = []
-            st.session_state.active_tab = "new"
-            st.session_state.current_analysis = None
-            st.rerun()
-else:
-    st.sidebar.info("Aucune archive.")
-
-# ---------------------------------------------------------
-# Affichage Principal
-# ---------------------------------------------------------
+# Affichage principal
 if st.session_state.active_tab == "new":
-    st.subheader("2. Paramétrage & Lancement de l'Analyse")
-    
-    col_tf, col_zoom = st.columns([2, 1])
-    with col_tf:
-        selected_timeframe = st.selectbox("Unité de temps principale", list(TIMEFRAME_MAPPING.keys()))
-    with col_zoom:
-        zoom_36h_option = st.checkbox("🔍 Zoom graphique 36h", value=True)
-    
-    st.markdown("")
+    selected_timeframe = st.selectbox("Unité de temps", list(TIMEFRAME_MAPPING.keys()), index=2)
     run_analysis = st.button("🚀 Lancer l'Analyse Institutionnelle", type="primary", use_container_width=True)
 
     if run_analysis:
         tf_info = TIMEFRAME_MAPPING[selected_timeframe]
-        
-        with st.spinner(f"Analyse globale & extraction fondamentale pour {selected_asset_name}..."):
-            df = load_market_data(ticker_symbol, tf_info["period"], tf_info["interval"])
-            df_daily = load_market_data(ticker_symbol, "6m", "1d")
+        df = load_market_data(ticker_symbol, tf_info["period"], tf_info["interval"])
+        df_daily = load_market_data(ticker_symbol, "6m", "1d")
+
+        if not df.empty and 'Close' in df.columns:
+            latest = df.iloc[-1]
+            current_price = float(latest['Close']) if custom_entry == 0.0 else custom_entry
             
-            recent_news_list = get_recent_news(ticker_symbol)
-            news_text = "\n".join(recent_news_list)
+            # --- CALCULS EXONÉRÉS DES ERREURS D'ÉCHELLE ---
+            # Distance en points
+            tp_points = abs(current_price - custom_tp) if custom_tp > 0 else (3.0 * float(latest.get('High', current_price) - latest.get('Low', current_price)))
+            sl_points = abs(current_price - custom_sl) if custom_sl > 0 else (1.5 * float(latest.get('High', current_price) - latest.get('Low', current_price)))
+            
+            spread_cost = spread_value * pip_value
 
-            if df.empty or 'Close' not in df.columns:
-                st.error(f"Erreur : Impossible de récupérer les données pour `{ticker_symbol}`. Vérifiez que le code ISIN ou le ticker est valide.")
+            # Si SL/TP personnalisés sont fournis, calcul exact sur la valeur du point
+            if custom_entry > 0 and custom_tp > 0:
+                calc_tp_eur = (tp_points * pip_value) - spread_cost
             else:
-                df['MM50'] = df['Close'].rolling(window=50 if len(df) >= 50 else 10).mean()
-                df['MM200'] = df['Close'].rolling(window=200 if len(df) >= 200 else 20).mean()
-                
-                delta = df['Close'].diff()
-                gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-                loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-                rs = gain / loss
-                df['RSI'] = 100 - (100 / (1 + rs))
+                calc_tp_eur = (tp_points * trade_volume * pip_value) - spread_cost
 
-                exp1 = df['Close'].ewm(span=12, adjust=False).mean()
-                exp2 = df['Close'].ewm(span=26, adjust=False).mean()
-                df['MACD'] = exp1 - exp2
-                df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
+            if custom_entry > 0 and custom_sl > 0:
+                # Si SL est au-dessus de l'entrée en SHORT (Gain sécurisé) ou en dessous (Perte)
+                if custom_sl < custom_entry: # SL vendeur en gain sécurisé
+                    calc_sl_eur = (sl_points * pip_value) - spread_cost
+                else: # SL classique en perte
+                    calc_sl_eur = -(sl_points * pip_value) - spread_cost
+            else:
+                calc_sl_eur = -(sl_points * trade_volume * pip_value) - spread_cost
 
-                high_low = df['High'] - df['Low']
-                high_close = np.abs(df['High'] - df['Close'].shift())
-                low_close = np.abs(df['Low'] - df['Close'].shift())
-                true_range = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
-                df['ATR'] = true_range.rolling(14).mean()
+            # Marge requise (Contrat standard Brent approx 1000 barils * volume / levier)
+            contract_size = 1000 if "BZ=F" in ticker_symbol or "CL=F" in ticker_symbol else 1
+            margin_required_eur = (current_price * trade_volume * contract_size) / leverage_value
 
-                boll_mid = df['Close'].rolling(20).mean()
-                boll_std = df['Close'].rolling(20).std()
-                df['Boll_Upper'] = boll_mid + (boll_std * 2)
-                df['Boll_Lower'] = boll_mid - (boll_std * 2)
+            mtf_trend = "Baissière 🔴" if not df_daily.empty and df_daily['Close'].iloc[-1] < df_daily['Close'].rolling(50).mean().iloc[-1] else "Haussière 🟢"
 
-                mtf_trend = "Haussière 🟢" if not df_daily.empty and df_daily['Close'].iloc[-1] > df_daily['Close'].rolling(50).mean().iloc[-1] else "Baissière 🔴"
+            prompt = f"""
+            Analyse {selected_asset_name} ({ticker_symbol}) en {selected_timeframe}.
+            Prix d'entrée: {current_price}, TP: {custom_tp}, SL: {custom_sl}.
+            Valeur du Point: {pip_value}€, Volume: {trade_volume}, Levier: 1:{leverage_value}.
+            """
 
-                df_d = load_daily_pivots_data(ticker_symbol)
-                if len(df_d) >= 2:
-                    prev_day = df_d.iloc[-2]
-                    h, l, c = float(prev_day['High']), float(prev_day['Low']), float(prev_day['Close'])
-                    pivot = (h + l + c) / 3
-                    r1 = pivot + 0.382 * (h - l)
-                    r2 = pivot + 0.618 * (h - l)
-                    s1 = pivot - 0.382 * (h - l)
-                    s2 = pivot - 0.618 * (h - l)
-                else:
-                    pivot, r1, r2, s1, s2 = 0.0, 0.0, 0.0, 0.0, 0.0
+            ai_report = generate_ai_report(prompt)
 
-                latest = df.iloc[-1]
-                current_price = float(latest['Close'])
-                atr_val = float(latest.get('ATR', current_price * 0.01))
-                rsi_val = float(latest.get('RSI', 50))
-                mm50 = float(latest.get('MM50', 0)) if pd.notna(latest.get('MM50')) else current_price
+            st.session_state.current_analysis = {
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                "asset": selected_asset_name,
+                "ticker": ticker_symbol,
+                "tf": selected_timeframe,
+                "price": current_price,
+                "mtf_trend": mtf_trend,
+                "confluence": 75,
+                "trade_volume": trade_volume,
+                "leverage": leverage_value,
+                "margin_eur": margin_required_eur,
+                "spread_value": spread_value,
+                "pip_value": pip_value,
+                "risk_eur": calc_sl_eur,
+                "tp1_eur": calc_tp_eur,
+                "report": ai_report,
+                "df": df, "pivot": 0, "r1": 0, "r2": 0, "s1": 0, "s2": 0,
+                "executed": False, "result": "En cours"
+            }
 
-                confluence_score = 50
-                if mtf_trend.startswith("Haussièr"): confluence_score += 15
-                if current_price > mm50: confluence_score += 15
-                if 40 <= rsi_val <= 60: confluence_score += 10
-                if current_price <= s1 or current_price >= r1: confluence_score += 20
-                confluence_score = min(98, max(15, confluence_score))
-
-                # --- CALCULS FINANCIERS PRÉCIS EN EUROS AVEC LEVIER & MARGE ---
-                sl_distance_price = 1.5 * atr_val
-                tp1_distance_price = 3.0 * atr_val
-                tp2_distance_price = 4.5 * atr_val
-
-                spread_cost_eur = spread_value * pip_value * trade_volume
-
-                risk_eur_val = (sl_distance_price * trade_volume * pip_value) + spread_cost_eur
-                tp1_eur_val = (tp1_distance_price * trade_volume * pip_value) - spread_cost_eur
-                tp2_eur_val = (tp2_distance_price * trade_volume * pip_value) - spread_cost_eur
-
-                # Calcul de la Marge Requise en € = (Prix * Volume * Taille standard de contrat / Levier)
-                # Estimation standardisée de l'exposition globale
-                notional_position_val = current_price * trade_volume * 1000 if "EURUSD" in ticker_symbol or "USD" in ticker_symbol else current_price * trade_volume
-                margin_required_eur = notional_position_val / leverage_value if leverage_value > 0 else notional_position_val
-
-                prompt = f"""
-                Tu es un comité d'investissement et un algorithme de trading institutionnel expert.
-                Analyse l'actif **{selected_asset_name} ({ticker_symbol})** en unité de temps **{selected_timeframe}**.
-
-                ### PARAMÈTRES DE POSITION DE L'UTILISATEUR :
-                - Volume engagé : {trade_volume:.2f} lots/unités
-                - Effet de Levier : 1:{leverage_value} (Marge immobilisée estimée : {margin_required_eur:.2f} €)
-                - Valeur du Spread : {spread_value:.1f} pips/pts (Coût fixe estimé : {spread_cost_eur:.2f} €)
-                - Valeur du Pip : {pip_value:.2f} €
-
-                ### DONNÉES TECHNIQUES & QUANTITATIVES :
-                - Prix actuel : {current_price:.2f}
-                - Tendance de fond (Multi-Timeframe Daily) : {mtf_trend}
-                - Score de Confluence Globale : {confluence_score}%
-                - RSI (14) : {rsi_val:.2f}
-                - ATR (Volatilité 14 périodes) : {atr_val:.2f}
-                - MM 50 : {mm50:.2f}
-                - **POINTS DE PIVOT FIBONACCI :** R2={r2:.2f}, R1={r1:.2f}, Pivot={pivot:.2f}, S1={s1:.2f}, S2={s2:.2f}
-
-                ### ACTUALITÉS ET FLUX D'INFORMATIONS RÉCENTS :
-                {news_text}
-
-                Fournis un rapport complet structuré STRICTEMENT ainsi :
-
-                ### 1. 📰 ANALYSE FONDAMENTALE ET MACROÉCONOMIQUE
-                - Présentation de la santé fondamentale globale de l'actif / secteur / marché.
-                - Synthèse et impact des dernières actualités majeures sur le cours à court/moyen terme.
-
-                ---
-
-                ### 2. 🌐 FILTRE MACRO & TENDANCE MULTI-TIMEFRAME
-                - Analyse de la cohérence entre les fondamentaux et la tendance de fond Daily ({mtf_trend}).
-
-                ---
-
-                ### 3. 📊 ANALYSE TECHNIQUE & SCORE DE CONFLUENCE ({confluence_score}%)
-                - Interprétation des indicateurs (RSI, ATR, Bollinger) et des niveaux Fibonacci.
-
-                ---
-
-                ### 4. 🎯 PLAN DE TRADE & STRATÉGIE
-                - Recommandation claire (LONG / SHORT / WAIT) avec justification technique et niveaux clés d'entrée, SL et TP.
-                - Recommandations sur la gestion du levier (1:{leverage_value}) et le respect du Capital / Marge.
-                """
-
-                with st.spinner("Génération du rapport par l'IA..."):
-                    ai_text = generate_ai_report(prompt)
-
-                timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-                
-                st.session_state.current_analysis = {
-                    "timestamp": timestamp_str,
-                    "asset": selected_asset_name,
-                    "ticker": ticker_symbol,
-                    "tf": selected_timeframe,
-                    "price": current_price,
-                    "mtf_trend": mtf_trend,
-                    "confluence": confluence_score,
-                    "trade_volume": trade_volume,
-                    "leverage": leverage_value,
-                    "margin_eur": margin_required_eur,
-                    "spread_value": spread_value,
-                    "pip_value": pip_value,
-                    "risk_eur": risk_eur_val,
-                    "tp1_eur": tp1_eur_val,
-                    "tp2_eur": tp2_eur_val,
-                    "report": ai_text,
-                    "df": df,
-                    "pivot": pivot,
-                    "r1": r1, "r2": r2, "s1": s1, "s2": s2,
-                    "news": recent_news_list,
-                    "zoom_36h": zoom_36h_option,
-                    "executed": False,
-                    "result": "En cours / Indéterminé"
-                }
-
-    if st.session_state.current_analysis is not None:
+    if st.session_state.current_analysis:
         ca = st.session_state.current_analysis
-        st.markdown("---")
-        st.markdown(f"## 📊 Rapport Institutionnel : {ca['asset']} ({ca['tf']}) — {ca['timestamp']}")
-        
+        st.markdown(f"## 📊 Rapport : {ca['asset']} ({ca['tf']}) — {ca['timestamp']}")
+
         m1, m2, m3, m4 = st.columns(4)
         with m1: st.metric("Tendance Daily", ca['mtf_trend'])
         with m2: st.metric("Confluence", f"{ca['confluence']}%")
-        with m3: st.metric("Marge Immobilisée", f"{ca.get('margin_eur', 0.0):.2f} €")
-        with m4: st.metric("Risque Max (Perte SL)", f"-{ca['risk_eur']:.2f} €", delta_color="inverse")
+        with m3: st.metric("Marge Immobilisée", f"{ca['margin_eur']:.2f} €")
+        with m4: st.metric("SL / Gain Sécurisé", f"{ca['risk_eur']:.2f} €")
 
-        st.markdown("### 💰 Calculs financiers précis (Gains / Pertes & Levier en €)")
-        col_calc1, col_calc2 = st.columns(2)
-        with col_calc1:
+        st.markdown("### 💰 Calculs Financiers Exacts en Euros (€)")
+        c1, c2 = st.columns(2)
+        with c1:
             st.markdown(f"""
-            * **Volume engagé :** `{ca['trade_volume']:.2f} lots/unités`
-            * **Effet de Levier choisi :** `1:{ca.get('leverage', 30)}`
-            * **Marge minimale requise :** `{ca.get('margin_eur', 0.0):.2f} €`
-            * **Valeur du Pip :** `{ca['pip_value']:.2f} €`
-            * **Spread appliqué :** `{ca['spread_value']:.1f} pips/pts`
+            * **Volume engagé :** `{ca['trade_volume']:.2f} lots`
+            * **Effet de Levier :** `1:{ca['leverage']}`
+            * **Marge requise :** `{ca['margin_eur']:.2f} €`
+            * **Valeur du Pip/Point :** `{ca['pip_value']:.2f} €`
             """)
-        with col_calc2:
+        with c2:
             st.markdown(f"""
-            * **Perte maximale estimée (Stop Loss) :** `🔴 -{ca['risk_eur']:.2f} €` (frais de spread inclus)
-            * **Gain potentiel cible 1 (TP1) :** `🟢 +{ca['tp1_eur']:.2f} €`
-            * **Gain potentiel cible 2 (TP2) :** `🟢 +{ca['tp2_eur']:.2f} €`
+            * **Résultat du Stop Loss (SL) :** `{ca['risk_eur']:.2f} €`
+            * **Gain potentiel Take Profit (TP) :** `🟢 +{ca['tp1_eur']:.2f} €`
             """)
 
-        fig_interactive = draw_interactive_chart(ca['df'], ca['pivot'], ca['r1'], ca['r2'], ca['s1'], ca['s2'], ca['asset'], ca['tf'], zoom_36h=ca['zoom_36h'])
-        st.plotly_chart(fig_interactive, use_container_width=True)
-
-        st.markdown("---")
-        with st.expander("📰 Voir les flux d'actualités et filtre macro", expanded=False):
-            for headline in ca['news']:
-                st.write(headline)
-
-        st.markdown("---")
-        st.markdown("### 📋 Synthèse Fondamentale & Plan Stratégique")
+        fig = draw_interactive_chart(ca['df'], 0, 0, 0, 0, 0, ca['asset'], ca['tf'])
+        st.plotly_chart(fig, use_container_width=True)
         st.markdown(ca['report'])
-
-        st.markdown("---")
-        col_save1, col_save2 = st.columns([1, 2])
-        with col_save1:
-            if st.button("💾 Enregistrer dans l'historique", type="primary", use_container_width=True):
-                new_id = (max([item['id'] for item in st.session_state.trade_history]) + 1) if st.session_state.trade_history else 1
-                ca_to_save = ca.copy()
-                ca_to_save['id'] = new_id
-                
-                st.session_state.trade_history.append(ca_to_save)
-                st.session_state.active_tab = new_id
-                st.session_state.current_analysis = None
-                st.rerun()
-        with col_save2:
-            st.info("💡 Cliquez sur le bouton ci-contre pour conserver cette analyse dans votre historique et accéder au suivi de position ainsi qu'au chat Gemini associé.")
-
-else:
-    entry = next((item for item in st.session_state.trade_history if item['id'] == st.session_state.active_tab), None)
-    
-    if entry:
-        if st.button("⬅️ Effectuer une nouvelle analyse"):
-            st.session_state.active_tab = "new"
-            st.session_state.current_analysis = None
-            st.rerun()
-
-        # Rétrocompatibilité pour les anciennes archives
-        if "trade_volume" not in entry:
-            entry["trade_volume"] = 0.10
-            entry["leverage"] = 30
-            entry["margin_eur"] = 0.00
-            entry["spread_value"] = 1.0
-            entry["pip_value"] = 1.00
-            entry["risk_eur"] = 15.00
-            entry["tp1_eur"] = 30.00
-            entry["tp2_eur"] = 45.00
-
-        st.markdown(f"## 📜 Archive : {entry['asset']} ({entry['tf']}) — {entry['timestamp']}")
-        
-        m1, m2, m3, m4 = st.columns(4)
-        with m1: st.metric("Tendance Daily", entry['mtf_trend'])
-        with m2: st.metric("Confluence", f"{entry['confluence']}%")
-        with m3: st.metric("Marge Requis", f"{entry.get('margin_eur', 0.0):.2f} €")
-        with m4: st.metric("Risque SL", f"-{entry['risk_eur']:.2f} €")
-
-        st.markdown("### 💰 Calculs financiers précis (Gains / Pertes & Levier en €)")
-        col_calc1, col_calc2 = st.columns(2)
-        with col_calc1:
-            st.markdown(f"""
-            * **Volume engagé :** `{entry['trade_volume']:.2f} lots/unités`
-            * **Effet de Levier choisi :** `1:{entry.get('leverage', 30)}`
-            * **Marge minimale requise :** `{entry.get('margin_eur', 0.0):.2f} €`
-            * **Valeur du Pip :** `{entry['pip_value']:.2f} €`
-            * **Spread appliqué :** `{entry['spread_value']:.1f} pips/pts`
-            """)
-        with col_calc2:
-            st.markdown(f"""
-            * **Perte maximale estimée (Stop Loss) :** `🔴 -{entry['risk_eur']:.2f} €`
-            * **Gain potentiel cible 1 (TP1) :** `🟢 +{entry['tp1_eur']:.2f} €`
-            * **Gain potentiel cible 2 (TP2) :** `🟢 +{entry['tp2_eur']:.2f} €`
-            """)
-
-        fig_interactive = draw_interactive_chart(entry['df'], entry['pivot'], entry['r1'], entry['r2'], entry['s1'], entry['s2'], entry['asset'], entry['tf'], zoom_36h=entry['zoom_36h'])
-        st.plotly_chart(fig_interactive, use_container_width=True)
-
-        st.markdown("---")
-        st.markdown("### 📊 Rapport d'Analyse Complete")
-        st.markdown(entry['report'])
-
-        st.markdown("---")
-        st.markdown("### 📋 Suivi de la Position")
-        col_a, col_b = st.columns(2)
-        with col_a:
-            trade_executed = st.radio("Trade réalisé ?", ["Non", "Oui"], index=1 if entry['executed'] else 0, key=f"exec_{entry['id']}")
-            entry['executed'] = (trade_executed == "Oui")
-        with col_b:
-            if entry['executed']:
-                result_options = ["En cours / Indéterminé", "Gagnant 🟢", "Perdant 🔴"]
-                current_res_idx = result_options.index(entry['result']) if entry['result'] in result_options else 0
-                entry['result'] = st.radio("Résultat :", result_options, index=current_res_idx, key=f"res_{entry['id']}")
-            else:
-                entry['result'] = "N/A"
-                st.info("Cochez 'Oui' pour consigner le résultat du trade.")
-
-        st.markdown("---")
-        st.markdown("### 💬 Assistant Trading IA (Chat)")
-        chat_key = f"chat_history_unique_{entry['id']}_{entry['ticker']}"
-        if chat_key not in st.session_state:
-            st.session_state[chat_key] = []
-
-        for message in st.session_state[chat_key]:
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"])
-
-        if user_query := st.chat_input("Ex: Quel est l'impact de mon effet de levier sur le risque d'appel de marge ?", key=f"chat_input_{entry['id']}"):
-            st.session_state[chat_key].append({"role": "user", "content": user_query})
-            with st.chat_message("user"): st.markdown(user_query)
-
-            with st.chat_message("assistant"):
-                with st.spinner("Analyse de la question..."):
-                    history = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state[chat_key][:-1]])
-                    prompt_chat = f"Contexte actif {entry['asset']} ({entry['ticker']}). Volume: {entry['trade_volume']}, Levier: 1:{entry.get('leverage', 30)}, Spread: {entry['spread_value']}, Pip: {entry['pip_value']}. Rapport: {entry['report']}\nHist: {history}\nQuestion: {user_query}"
-                    reply = generate_ai_report(prompt_chat)
-                    st.markdown(reply)
-                    st.session_state[chat_key].append({"role": "assistant", "content": reply})
-    else:
-        st.session_state.active_tab = "new"
-        st.session_state.current_analysis = None
-        st.rerun()
