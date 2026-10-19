@@ -8,37 +8,18 @@ import json
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 
-# Configuration de la page Streamlit avec un thème global sombre / carbone
+# Configuration de la page Streamlit
 st.set_page_config(page_title="Bot Trading IA - Version Institutionnelle", layout="wide")
 
-# Injection de style CSS personnalisé (effet carbone / sombre professionnel)
 st.markdown("""
     <style>
-    .stApp {
-        background-color: #12141a;
-        color: #e0e0e0;
-    }
-    sidebar .stSidebar {
-        background-color: #1a1d24;
-    }
+    .stApp { background-color: #12141a; color: #e0e0e0; }
+    sidebar .stSidebar { background-color: #1a1d24; }
     .stButton>button {
         background: linear-gradient(135deg, #2b313b 0%, #1f232a 100%);
-        color: #ffffff;
-        border: 1px solid #3a3f4b;
-        border-radius: 6px;
-        font-weight: 600;
+        color: #ffffff; border: 1px solid #3a3f4b; border-radius: 6px; font-weight: 600;
     }
-    .stButton>button:hover {
-        border-color: #26a69a;
-        color: #26a69a;
-    }
-    .metric-card {
-        background-color: #1a1d24;
-        border: 1px solid #2a2e39;
-        padding: 15px;
-        border-radius: 8px;
-        text-align: center;
-    }
+    .stButton>button:hover { border-color: #26a69a; color: #26a69a; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -51,8 +32,7 @@ st.markdown("Analyse technique & fondamentale, multi-timeframe incluant le **Sca
 GEMINI_API_KEYS = [
     "AQ.Ab8RN6LER8j4XDy5SJbtfV6_cwWRIxnYYl9apPQ5Kf76YtyeiA",
     "AQ.Ab8RN6J9IGu0uxxlZGo2s-GGGND7nvm0nGv1aRVlaLI5BQL5IA",
-    "AQ.Ab8RN6KRUrOJvrhpyETf5YPhr8VUvlSxyONYFAyUnlbfATTRsQ",
-    "AQ.Ab8RN6I_iXUbNA_CpdjSrI_WBGtBEfx_nfkZCEZfuAXAMLHCgg"
+    "AQ.Ab8RN6KRUrOJvrhpyETf5YPhr8VUvlSxyONYFAyUnlbfATTRsQ"
 ]
 
 GROQ_API_KEY = "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"
@@ -63,8 +43,30 @@ DEEPSEEK_API_KEY = "sk-1b77d4e7788e4e509baeb79ccb703847"
 def generate_ai_report(prompt_text):
     error_details = []
 
-    # 1. Tentative sur Gemini (Rotation des clés)
-    models_gemini = ['gemini-1.5-flash', 'gemini-pro', 'gemini-3.8-flash']
+    # 1. Fallback Groq (Model ajusté pour Groq)
+    if GROQ_API_KEY:
+        for model_groq in ["llama-3.1-70b-versatile", "llama3-70b-8192", "mixtral-8x7b-32768"]:
+            try:
+                headers = {
+                    "Authorization": f"Bearer {GROQ_API_KEY}",
+                    "Content-Type": "application/json"
+                }
+                payload = {
+                    "model": model_groq,
+                    "messages": [{"role": "user", "content": prompt_text}],
+                    "temperature": 0.3
+                }
+                res = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=25)
+                if res.status_code == 200:
+                    content = res.json()["choices"][0]["message"]["content"]
+                    return f"*(Rapport généré via Groq - {model_groq})*\n\n" + content
+                else:
+                    error_details.append(f"Groq [{model_groq}] (HTTP {res.status_code}) : {res.text}")
+            except Exception as e:
+                error_details.append(f"Groq [{model_groq}] : {str(e)}")
+
+    # 2. Tentative Gemini avec modélisation à jour
+    models_gemini = ['gemini-2.5-flash', 'gemini-1.5-flash-latest', 'gemini-2.0-flash']
     for api_key in GEMINI_API_KEYS:
         try:
             genai.configure(api_key=api_key)
@@ -77,30 +79,9 @@ def generate_ai_report(prompt_text):
                 except Exception as e:
                     error_details.append(f"Gemini (`{api_key[:8]}...`) [{m_name}] : {str(e)}")
         except Exception as e:
-            error_details.append(f"Erreur config Gemini (`{api_key[:8]}...`) : {str(e)}")
+            error_details.append(f"Config Gemini : {str(e)}")
 
-    # 2. Fallback sur GROQ (Requete HTTP directe - Aucun module requis)
-    if GROQ_API_KEY:
-        try:
-            headers = {
-                "Authorization": f"Bearer {GROQ_API_KEY}",
-                "Content-Type": "application/json"
-            }
-            payload = {
-                "model": "llama-3.3-70b-versatile",
-                "messages": [{"role": "user", "content": prompt_text}],
-                "temperature": 0.3
-            }
-            res = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=30)
-            if res.status_code == 200:
-                content = res.json()["choices"][0]["message"]["content"]
-                return "*(Rapport généré via Fallback Groq - Llama 3.3)*\n\n" + content
-            else:
-                error_details.append(f"Fallback Groq (HTTP {res.status_code}) : {res.text}")
-        except Exception as e:
-            error_details.append(f"Fallback Groq échoué : {str(e)}")
-
-    # 3. Fallback sur MISTRAL (Requete HTTP directe - Aucun module requis)
+    # 3. Fallback Mistral
     if MISTRAL_API_KEY:
         try:
             headers = {
@@ -111,16 +92,16 @@ def generate_ai_report(prompt_text):
                 "model": "mistral-small-latest",
                 "messages": [{"role": "user", "content": prompt_text}]
             }
-            res = requests.post("https://api.mistral.ai/v1/chat/completions", headers=headers, json=payload, timeout=30)
+            res = requests.post("https://api.mistral.ai/v1/chat/completions", headers=headers, json=payload, timeout=25)
             if res.status_code == 200:
                 content = res.json()["choices"][0]["message"]["content"]
-                return "*(Rapport généré via Fallback Mistral)*\n\n" + content
+                return "*(Rapport généré via Mistral)*\n\n" + content
             else:
-                error_details.append(f"Fallback Mistral (HTTP {res.status_code}) : {res.text}")
+                error_details.append(f"Mistral (HTTP {res.status_code}) : {res.text}")
         except Exception as e:
-            error_details.append(f"Fallback Mistral échoué : {str(e)}")
+            error_details.append(f"Mistral : {str(e)}")
 
-    # 4. Fallback sur OPENAI (Requete HTTP directe - Aucun module requis)
+    # 4. Fallback OpenAI
     if OPENAI_API_KEY:
         try:
             headers = {
@@ -131,16 +112,16 @@ def generate_ai_report(prompt_text):
                 "model": "gpt-4o-mini",
                 "messages": [{"role": "user", "content": prompt_text}]
             }
-            res = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=30)
+            res = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=25)
             if res.status_code == 200:
                 content = res.json()["choices"][0]["message"]["content"]
-                return "*(Rapport généré via Fallback OpenAI - GPT-4o-mini)*\n\n" + content
+                return "*(Rapport généré via OpenAI - GPT-4o-mini)*\n\n" + content
             else:
-                error_details.append(f"Fallback OpenAI (HTTP {res.status_code}) : {res.text}")
+                error_details.append(f"OpenAI (HTTP {res.status_code}) : {res.text}")
         except Exception as e:
-            error_details.append(f"Fallback OpenAI échoué : {str(e)}")
+            error_details.append(f"OpenAI : {str(e)}")
 
-    # 5. Fallback sur DEEPSEEK (Requete HTTP directe - Aucun module requis)
+    # 5. Fallback DeepSeek
     if DEEPSEEK_API_KEY:
         try:
             headers = {
@@ -151,16 +132,16 @@ def generate_ai_report(prompt_text):
                 "model": "deepseek-chat",
                 "messages": [{"role": "user", "content": prompt_text}]
             }
-            res = requests.post("https://api.deepseek.com/v1/chat/completions", headers=headers, json=payload, timeout=30)
+            res = requests.post("https://api.deepseek.com/v1/chat/completions", headers=headers, json=payload, timeout=25)
             if res.status_code == 200:
                 content = res.json()["choices"][0]["message"]["content"]
-                return "*(Rapport généré via Fallback DeepSeek)*\n\n" + content
+                return "*(Rapport généré via DeepSeek)*\n\n" + content
             else:
-                error_details.append(f"Fallback DeepSeek (HTTP {res.status_code}) : {res.text}")
+                error_details.append(f"DeepSeek (HTTP {res.status_code}) : {res.text}")
         except Exception as e:
-            error_details.append(f"Fallback DeepSeek échoué : {str(e)}")
+            error_details.append(f"DeepSeek : {str(e)}")
 
-    return "### ⚠️ Erreur critique de toutes les IA :\n\nToutes les clés Gemini ont échoué et les API de secours ont rencontré des erreurs.\n\n" + "\n\n".join(error_details)
+    return "### ⚠️ Erreur détaillée des services IA :\n\n" + "\n\n".join(error_details)
 
 # ---------------------------------------------------------
 # Dictionnaire complet et exhaustif (100+ actifs)
@@ -271,9 +252,6 @@ def get_recent_news(ticker_str):
     except Exception:
         return ["Actualités non disponibles."]
 
-# ---------------------------------------------------------
-# Graphique interactif Plotly avec bougies pleines & flèches
-# ---------------------------------------------------------
 def draw_interactive_chart(df, pivot, r1, r2, s1, s2, asset_name, timeframe, zoom_36h=False):
     df_plot = df.copy()
     if zoom_36h and timeframe in ["Scalping", "M15", "H1", "H4"]:
@@ -341,19 +319,11 @@ def draw_interactive_chart(df, pivot, r1, r2, s1, s2, asset_name, timeframe, zoo
     )
     return fig
 
-# Initialisation des états de session
-if "trade_history" not in st.session_state:
-    st.session_state.trade_history = []
-if "active_tab" not in st.session_state:
-    st.session_state.active_tab = "new"
-if "current_analysis" not in st.session_state:
-    st.session_state.current_analysis = None
+if "trade_history" not in st.session_state: st.session_state.trade_history = []
+if "active_tab" not in st.session_state: st.session_state.active_tab = "new"
+if "current_analysis" not in st.session_state: st.session_state.current_analysis = None
 
-# ---------------------------------------------------------
-# Barre latérale : Sélection globale
-# ---------------------------------------------------------
 st.sidebar.header("1. Sélection de l'Actif")
-
 custom_ticker_input = st.sidebar.text_input("🔍 Ticker libre (ex: AAPL, BTC-USD)", "").strip()
 custom_isin_input = st.sidebar.text_input("🔍 Ou code ISIN (ex: FR0000120271)", "").strip()
 
@@ -371,7 +341,6 @@ else:
     ticker_symbol = ASSETS_DICTIONARY[selected_category][selected_asset_name]
     st.sidebar.markdown(f"**Ticker Yahoo Finance :** `{ticker_symbol}`")
 
-# --- Menu Historique ---
 st.sidebar.markdown("---")
 st.sidebar.header("📜 Historique")
 if st.session_state.trade_history:
@@ -404,47 +373,33 @@ if st.session_state.trade_history:
 else:
     st.sidebar.info("Aucune archive.")
 
-# ---------------------------------------------------------
-# Affichage Principal
-# ---------------------------------------------------------
 if st.session_state.active_tab == "new":
     st.subheader("2. Paramétrage & Lancement de l'Analyse")
-    
     col_tf, col_zoom = st.columns([2, 1])
-    with col_tf:
-        selected_timeframe = st.selectbox("Unité de temps principale", list(TIMEFRAME_MAPPING.keys()))
-    with col_zoom:
-        zoom_36h_option = st.checkbox("🔍 Zoom graphique 36h", value=True)
+    with col_tf: selected_timeframe = st.selectbox("Unité de temps principale", list(TIMEFRAME_MAPPING.keys()))
+    with col_zoom: zoom_36h_option = st.checkbox("🔍 Zoom graphique 36h", value=True)
     
     st.markdown("")
     run_analysis = st.button("🚀 Lancer l'Analyse Institutionnelle", type="primary", use_container_width=True)
 
     if run_analysis:
         tf_info = TIMEFRAME_MAPPING[selected_timeframe]
-        
-        with st.spinner(f"Analyse multi-timeframe et calcul des indicateurs pour {selected_asset_name}..."):
+        with st.spinner(f"Analyse multi-timeframe pour {selected_asset_name}..."):
             df = load_market_data(ticker_symbol, tf_info["period"], tf_info["interval"])
             df_daily = load_market_data(ticker_symbol, "6m", "1d")
-            
             recent_news_list = get_recent_news(ticker_symbol)
             news_text = "\n".join(recent_news_list)
 
             if df.empty or 'Close' not in df.columns:
-                st.error(f"Erreur : Impossible de récupérer les données pour `{ticker_symbol}`. Vérifiez que le code ISIN ou le ticker est valide.")
+                st.error(f"Erreur : Impossible de récupérer les données pour `{ticker_symbol}`.")
             else:
                 df['MM50'] = df['Close'].rolling(window=50 if len(df) >= 50 else 10).mean()
                 df['MM200'] = df['Close'].rolling(window=200 if len(df) >= 200 else 20).mean()
-                
                 delta = df['Close'].diff()
                 gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
                 loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
                 rs = gain / loss
                 df['RSI'] = 100 - (100 / (1 + rs))
-
-                exp1 = df['Close'].ewm(span=12, adjust=False).mean()
-                exp2 = df['Close'].ewm(span=26, adjust=False).mean()
-                df['MACD'] = exp1 - exp2
-                df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
 
                 high_low = df['High'] - df['Low']
                 high_close = np.abs(df['High'] - df['Close'].shift())
@@ -486,72 +441,47 @@ if st.session_state.active_tab == "new":
 
                 prompt = f"""
                 Tu es un comité d'investissement et un algorithme de trading institutionnel expert.
-                Analyse l'actif **{selected_asset_name} ({ticker_symbol})** en unité de temps **{selected_timeframe}** (Configuration spécifique Scalping / Intraday court si sélectionné).
+                Analyse l'actif **{selected_asset_name} ({ticker_symbol})** en unité de temps **{selected_timeframe}**.
 
-                ### DONNÉES TECHNIQUES & QUANTITATIVES :
+                ### DONNÉES TECHNIQUES :
                 - Prix actuel : {current_price:.2f}
-                - Tendance de fond (Multi-Timeframe Daily) : {mtf_trend}
-                - Score de Confluence Globale : {confluence_score}%
+                - Tendance Daily : {mtf_trend}
+                - Score de Confluence : {confluence_score}%
                 - RSI (14) : {rsi_val:.2f}
-                - ATR (Volatilité 14 périodes) : {atr_val:.2f}
+                - ATR : {atr_val:.2f}
                 - MM 50 : {mm50:.2f}
-                - **POINTS DE PIVOT FIBONACCI :** R2={r2:.2f}, R1={r1:.2f}, Pivot={pivot:.2f}, S1={s1:.2f}, S2={s2:.2f}
+                - PIVOTS : R2={r2:.2f}, R1={r1:.2f}, Pivot={pivot:.2f}, S1={s1:.2f}, S2={s2:.2f}
 
-                ### ACTUALITÉS ET MACRO :
+                ### ACTUALITÉS :
                 {news_text}
 
-                Fournis un rapport complet structuré STRICTEMENT ainsi :
-
+                Fournis un rapport complet structuré :
                 ### 1. 📰 ANALYSE FONDAMENTALE DE L'ACTIF
-                - Présentation de la santé fondamentale globale de l'actif, de son secteur et de l'environnement macroéconomique actuel.
-                - Analyse de l'impact des actualités récentes sur les perspectives de l'actif.
-
-                ---
-
                 ### 2. 🌐 FILTRE MACRO & TENDANCE MULTI-TIMEFRAME
-                - Analyse de la cohérence entre le flux d'actualité et la tendance de fond Daily ({mtf_trend}).
-
-                ---
-
                 ### 3. 📊 ANALYSE TECHNIQUE & SCORE DE CONFLUENCE ({confluence_score}%)
-                - Interprétation des indicateurs (RSI, ATR, Bollinger) et des niveaux Fibonacci adaptés au style de trading ({selected_timeframe}).
-
-                ---
-
                 ### 4. 🎯 PLAN DE TRADE INSTITUTIONNEL
-                - Recommandation claire (LONG / SHORT / WAIT).
-                - Point d'entrée, Stop Loss dynamique, et Take Profits.
-                - **GESTION DU BREAK-EVEN (BE) :** Précise explicitement à quel niveau exact de prix (ou après quel objectif atteint / nombre de pips gagnés) il convient de déplacer le Stop Loss au point d'entrée (Break-Even) pour sécuriser la position sans risque.
+                - Recommandation (LONG / SHORT / WAIT)
+                - Point d'entrée, SL, TP
+                - **GESTION DU BREAK-EVEN (BE) :** Niveau précis pour passer le SL à BE.
                 """
 
-                with st.spinner("Génération du rapport institutionnel par l'IA (Système de fallback actif)..."):
+                with st.spinner("Génération du rapport par l'IA..."):
                     ai_text = generate_ai_report(prompt)
 
                 timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-                
                 st.session_state.current_analysis = {
-                    "timestamp": timestamp_str,
-                    "asset": selected_asset_name,
-                    "ticker": ticker_symbol,
-                    "tf": selected_timeframe,
-                    "price": current_price,
-                    "mtf_trend": mtf_trend,
-                    "confluence": confluence_score,
-                    "report": ai_text,
-                    "df": df,
-                    "pivot": pivot,
-                    "r1": r1, "r2": r2, "s1": s1, "s2": s2,
-                    "news": recent_news_list,
-                    "zoom_36h": zoom_36h_option,
-                    "executed": False,
-                    "result": "En cours / Indéterminé"
+                    "timestamp": timestamp_str, "asset": selected_asset_name, "ticker": ticker_symbol,
+                    "tf": selected_timeframe, "price": current_price, "mtf_trend": mtf_trend,
+                    "confluence": confluence_score, "report": ai_text, "df": df,
+                    "pivot": pivot, "r1": r1, "r2": r2, "s1": s1, "s2": s2,
+                    "news": recent_news_list, "zoom_36h": zoom_36h_option,
+                    "executed": False, "result": "En cours / Indéterminé"
                 }
 
     if st.session_state.current_analysis is not None:
         ca = st.session_state.current_analysis
         st.markdown("---")
         st.markdown(f"## 📊 Rapport Institutionnel : {ca['asset']} ({ca['tf']}) — {ca['timestamp']}")
-        
         m1, m2, m3 = st.columns(3)
         with m1: st.metric("Tendance Daily (MTF)", ca['mtf_trend'])
         with m2: st.metric("Score de Confluence", f"{ca['confluence']}%")
@@ -561,9 +491,8 @@ if st.session_state.active_tab == "new":
         st.plotly_chart(fig_interactive, use_container_width=True)
 
         st.markdown("---")
-        with st.expander("📰 Voir le flux d'actualités et filtre macro", expanded=False):
-            for headline in ca['news']:
-                st.write(headline)
+        with st.expander("📰 Voir les actualités", expanded=False):
+            for headline in ca['news']: st.write(headline)
 
         st.markdown("---")
         st.markdown("### 📋 Synthèse et Plan Stratégique")
@@ -579,14 +508,12 @@ if st.session_state.active_tab == "new":
                 st.session_state.trade_history.append(ca_to_save)
                 st.session_state.active_tab = new_id
                 st.session_state.current_analysis = None
-                st.success("Analyse enregistrée avec succès !")
+                st.success("Analyse enregistrée !")
                 st.rerun()
-        with col_save2:
-            st.info("💡 Cliquez pour archiver l'analyse, suivre votre position et échanger avec le module IA.")
+        with col_save2: st.info("💡 Suivez votre position et échangez avec l'IA.")
 
 else:
     entry = next((item for item in st.session_state.trade_history if item['id'] == st.session_state.active_tab), None)
-    
     if entry:
         if st.button("⬅️ Effectuer une nouvelle analyse"):
             st.session_state.active_tab = "new"
@@ -594,7 +521,6 @@ else:
             st.rerun()
 
         st.markdown(f"## 📜 Archive : {entry['asset']} ({entry['tf']}) — {entry['timestamp']}")
-        
         m1, m2, m3 = st.columns(3)
         with m1: st.metric("Tendance Daily", entry['mtf_trend'])
         with m2: st.metric("Score Confluence", f"{entry['confluence']}%")
@@ -620,22 +546,18 @@ else:
                 entry['result'] = st.radio("Résultat :", result_options, index=current_res_idx, key=f"res_{entry['id']}")
             else:
                 entry['result'] = "N/A"
-                st.info("Cochez 'Oui' pour consigner le résultat du trade.")
 
         st.markdown("---")
         st.markdown("### 💬 Assistant Trading IA (Chat)")
         chat_key = f"chat_history_unique_{entry['id']}_{entry['ticker']}"
-        if chat_key not in st.session_state:
-            st.session_state[chat_key] = []
+        if chat_key not in st.session_state: st.session_state[chat_key] = []
 
         for message in st.session_state[chat_key]:
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"])
+            with st.chat_message(message["role"]): st.markdown(message["content"])
 
         if user_query := st.chat_input("Ex: À quel niveau dois-je déplacer mon SL en BE ?", key=f"chat_input_{entry['id']}"):
             st.session_state[chat_key].append({"role": "user", "content": user_query})
             with st.chat_message("user"): st.markdown(user_query)
-
             with st.chat_message("assistant"):
                 with st.spinner("Analyse de la question..."):
                     history = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state[chat_key][:-1]])
