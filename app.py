@@ -3,9 +3,8 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import google.generativeai as genai
-import openai
-from groq import Groq
-from mistralai import Mistral
+import requests
+import json
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 
@@ -80,60 +79,88 @@ def generate_ai_report(prompt_text):
         except Exception as e:
             error_details.append(f"Erreur config Gemini (`{api_key[:8]}...`) : {str(e)}")
 
-    # 2. Fallback sur GROQ (Llama 3)
+    # 2. Fallback sur GROQ (Requete HTTP directe - Aucun module requis)
     if GROQ_API_KEY:
         try:
-            client_groq = Groq(api_key=GROQ_API_KEY)
-            completion = client_groq.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[{"role": "user", "content": prompt_text}],
-                temperature=0.3,
-            )
-            if completion.choices[0].message.content:
-                return "*(Rapport généré via Fallback Groq - Llama 3.3)*\n\n" + completion.choices[0].message.content
+            headers = {
+                "Authorization": f"Bearer {GROQ_API_KEY}",
+                "Content-Type": "application/json"
+            }
+            payload = {
+                "model": "llama-3.3-70b-versatile",
+                "messages": [{"role": "user", "content": prompt_text}],
+                "temperature": 0.3
+            }
+            res = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=30)
+            if res.status_code == 200:
+                content = res.json()["choices"][0]["message"]["content"]
+                return "*(Rapport généré via Fallback Groq - Llama 3.3)*\n\n" + content
+            else:
+                error_details.append(f"Fallback Groq (HTTP {res.status_code}) : {res.text}")
         except Exception as e:
             error_details.append(f"Fallback Groq échoué : {str(e)}")
 
-    # 3. Fallback sur MISTRAL
+    # 3. Fallback sur MISTRAL (Requete HTTP directe - Aucun module requis)
     if MISTRAL_API_KEY:
         try:
-            client_mistral = Mistral(api_key=MISTRAL_API_KEY)
-            res = client_mistral.chat.complete(
-                model="mistral-small-latest",
-                messages=[{"role": "user", "content": prompt_text}]
-            )
-            if res.choices[0].message.content:
-                return "*(Rapport généré via Fallback Mistral)*\n\n" + res.choices[0].message.content
+            headers = {
+                "Authorization": f"Bearer {MISTRAL_API_KEY}",
+                "Content-Type": "application/json"
+            }
+            payload = {
+                "model": "mistral-small-latest",
+                "messages": [{"role": "user", "content": prompt_text}]
+            }
+            res = requests.post("https://api.mistral.ai/v1/chat/completions", headers=headers, json=payload, timeout=30)
+            if res.status_code == 200:
+                content = res.json()["choices"][0]["message"]["content"]
+                return "*(Rapport généré via Fallback Mistral)*\n\n" + content
+            else:
+                error_details.append(f"Fallback Mistral (HTTP {res.status_code}) : {res.text}")
         except Exception as e:
             error_details.append(f"Fallback Mistral échoué : {str(e)}")
 
-    # 4. Fallback sur OPENAI (ChatGPT)
+    # 4. Fallback sur OPENAI (Requete HTTP directe - Aucun module requis)
     if OPENAI_API_KEY:
         try:
-            client_openai = openai.OpenAI(api_key=OPENAI_API_KEY)
-            response = client_openai.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[{"role": "user", "content": prompt_text}]
-            )
-            if response.choices[0].message.content:
-                return "*(Rapport généré via Fallback OpenAI - GPT-4o-mini)*\n\n" + response.choices[0].message.content
+            headers = {
+                "Authorization": f"Bearer {OPENAI_API_KEY}",
+                "Content-Type": "application/json"
+            }
+            payload = {
+                "model": "gpt-4o-mini",
+                "messages": [{"role": "user", "content": prompt_text}]
+            }
+            res = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=30)
+            if res.status_code == 200:
+                content = res.json()["choices"][0]["message"]["content"]
+                return "*(Rapport généré via Fallback OpenAI - GPT-4o-mini)*\n\n" + content
+            else:
+                error_details.append(f"Fallback OpenAI (HTTP {res.status_code}) : {res.text}")
         except Exception as e:
             error_details.append(f"Fallback OpenAI échoué : {str(e)}")
 
-    # 5. Fallback sur DEEPSEEK (Compatible SDK OpenAI)
+    # 5. Fallback sur DEEPSEEK (Requete HTTP directe - Aucun module requis)
     if DEEPSEEK_API_KEY:
         try:
-            client_deepseek = openai.OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com")
-            response = client_deepseek.chat.completions.create(
-                model="deepseek-chat",
-                messages=[{"role": "user", "content": prompt_text}]
-            )
-            if response.choices[0].message.content:
-                return "*(Rapport généré via Fallback DeepSeek)*\n\n" + response.choices[0].message.content
+            headers = {
+                "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+                "Content-Type": "application/json"
+            }
+            payload = {
+                "model": "deepseek-chat",
+                "messages": [{"role": "user", "content": prompt_text}]
+            }
+            res = requests.post("https://api.deepseek.com/v1/chat/completions", headers=headers, json=payload, timeout=30)
+            if res.status_code == 200:
+                content = res.json()["choices"][0]["message"]["content"]
+                return "*(Rapport généré via Fallback DeepSeek)*\n\n" + content
+            else:
+                error_details.append(f"Fallback DeepSeek (HTTP {res.status_code}) : {res.text}")
         except Exception as e:
             error_details.append(f"Fallback DeepSeek échoué : {str(e)}")
 
-    return "### ⚠️ Erreur critique de toutes les IA :\n\nToutes les clés Gemini ont échoué et aucun autre fournisseur de secours (Groq, Mistral, OpenAI, DeepSeek) n'a de clé valide renseignée.\n\n" + "\n\n".join(error_details)
+    return "### ⚠️ Erreur critique de toutes les IA :\n\nToutes les clés Gemini ont échoué et les API de secours ont rencontré des erreurs.\n\n" + "\n\n".join(error_details)
 
 # ---------------------------------------------------------
 # Dictionnaire complet et exhaustif (100+ actifs)
