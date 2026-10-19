@@ -3,5 +3,7 @@ yfinance
 pandas
 numpy
 google-generativeai
-matplotlib
+openai
+groq
+mistralai
 plotly
