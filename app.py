@@ -43,43 +43,37 @@ DEEPSEEK_API_KEY = "sk-1b77d4e7788e4e509baeb79ccb703847"
 def generate_ai_report(prompt_text):
     error_details = []
 
-    # 1. Fallback Groq (Model ajusté pour Groq)
+    # 1. Fallback Groq (Modèle actif mis à jour)
     if GROQ_API_KEY:
-        for model_groq in ["llama-3.1-70b-versatile", "llama3-70b-8192", "mixtral-8x7b-32768"]:
-            try:
-                headers = {
-                    "Authorization": f"Bearer {GROQ_API_KEY}",
-                    "Content-Type": "application/json"
-                }
-                payload = {
-                    "model": model_groq,
-                    "messages": [{"role": "user", "content": prompt_text}],
-                    "temperature": 0.3
-                }
-                res = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=25)
-                if res.status_code == 200:
-                    content = res.json()["choices"][0]["message"]["content"]
-                    return f"*(Rapport généré via Groq - {model_groq})*\n\n" + content
-                else:
-                    error_details.append(f"Groq [{model_groq}] (HTTP {res.status_code}) : {res.text}")
-            except Exception as e:
-                error_details.append(f"Groq [{model_groq}] : {str(e)}")
+        try:
+            headers = {
+                "Authorization": f"Bearer {GROQ_API_KEY}",
+                "Content-Type": "application/json"
+            }
+            payload = {
+                "model": "llama-3.3-70b-versatile",
+                "messages": [{"role": "user", "content": prompt_text}],
+                "temperature": 0.3
+            }
+            res = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=25)
+            if res.status_code == 200:
+                content = res.json()["choices"][0]["message"]["content"]
+                return f"*(Rapport généré via Groq - llama-3.3-70b-versatile)*\n\n" + content
+            else:
+                error_details.append(f"Groq (HTTP {res.status_code}) : {res.text}")
+        except Exception as e:
+            error_details.append(f"Groq : {str(e)}")
 
-    # 2. Tentative Gemini avec modélisation à jour
-    models_gemini = ['gemini-2.5-flash', 'gemini-1.5-flash-latest', 'gemini-2.0-flash']
+    # 2. Tentative Gemini (Modèle actif `gemini-3.8-flash`)
     for api_key in GEMINI_API_KEYS:
         try:
             genai.configure(api_key=api_key)
-            for m_name in models_gemini:
-                try:
-                    m = genai.GenerativeModel(m_name)
-                    response = m.generate_content(prompt_text)
-                    if response and response.text:
-                        return f"*(Rapport généré via Gemini - {m_name})*\n\n" + response.text
-                except Exception as e:
-                    error_details.append(f"Gemini (`{api_key[:8]}...`) [{m_name}] : {str(e)}")
+            m = genai.GenerativeModel('gemini-3.8-flash')
+            response = m.generate_content(prompt_text)
+            if response and response.text:
+                return f"*(Rapport généré via Gemini - gemini-3.8-flash)*\n\n" + response.text
         except Exception as e:
-            error_details.append(f"Config Gemini : {str(e)}")
+            error_details.append(f"Gemini (`{api_key[:8]}...`) : {str(e)}")
 
     # 3. Fallback Mistral
     if MISTRAL_API_KEY:
