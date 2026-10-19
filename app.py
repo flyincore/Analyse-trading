@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 # Configuration de la page Streamlit
 st.set_page_config(page_title="Bot Trading IA - Version Institutionnelle", layout="wide")
 
-# Style CSS sombre / carbone
+# Style CSS sombre / carbone professionnel
 st.markdown("""
     <style>
     .stApp {
@@ -34,7 +34,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("🎯 Bot d'Analyse Trading Pro — Suite Institutionnelle")
-st.markdown("Analyse technique & fondamentale, calculs financiers exacts en Euros (€) et journal de trading.")
+st.markdown("Analyse technique & fondamentale, multi-timeframe, score de confluence, calculs financiers exacts en € et journal de trading.")
 
 # API Keys Gemini
 API_KEYS = [
@@ -67,7 +67,7 @@ def generate_ai_report(prompt_text):
 
     return "### ⚠️ Erreur API Gemini :\n" + "\n\n".join(error_details)
 
-# Actifs
+# Dictionnaire des actifs
 ASSETS_DICTIONARY = {
     "🇺🇸 Actions USA (Wall Street)": {
         "Apple": "AAPL", "Nvidia": "NVDA", "Microsoft": "MSFT", "Amazon": "AMZN",
@@ -161,11 +161,26 @@ if "active_tab" not in st.session_state:
 if "current_analysis" not in st.session_state:
     st.session_state.current_analysis = None
 
-# Sidebar
+# =========================================================
+# BARRE LATÉRALE : Sélection, Recherche & Paramètres
+# =========================================================
 st.sidebar.header("1. Sélection de l'Actif")
-selected_category = st.sidebar.selectbox("Catégorie", list(ASSETS_DICTIONARY.keys()))
-selected_asset_name = st.sidebar.selectbox("Actif", list(ASSETS_DICTIONARY[selected_category].keys()))
-ticker_symbol = ASSETS_DICTIONARY[selected_category][selected_asset_name]
+
+custom_ticker_input = st.sidebar.text_input("🔍 Ticker libre (ex: AAPL, BZ=F)", "").strip()
+custom_isin_input = st.sidebar.text_input("🔍 Ou Code ISIN", "").strip()
+
+if custom_ticker_input:
+    ticker_symbol = custom_ticker_input.upper()
+    selected_asset_name = custom_ticker_input.upper()
+    st.sidebar.info(f"Ticker actif : `{ticker_symbol}`")
+elif custom_isin_input:
+    ticker_symbol = custom_isin_input.upper()
+    selected_asset_name = f"ISIN: {ticker_symbol}"
+    st.sidebar.info(f"Code ISIN actif : `{ticker_symbol}`")
+else:
+    selected_category = st.sidebar.selectbox("Catégorie", list(ASSETS_DICTIONARY.keys()))
+    selected_asset_name = st.sidebar.selectbox("Actif", list(ASSETS_DICTIONARY[selected_category].keys()))
+    ticker_symbol = ASSETS_DICTIONARY[selected_category][selected_asset_name]
 
 st.sidebar.markdown("---")
 st.sidebar.header("⚙️ Paramètres de Position & Risque")
@@ -180,55 +195,102 @@ custom_entry = st.sidebar.number_input("Prix d'ouverture / Entrée (€)", min_v
 custom_tp = st.sidebar.number_input("Take Profit (TP) (€)", min_value=0.0, value=105.15, step=0.01, format="%.2f")
 custom_sl = st.sidebar.number_input("Stop Loss (SL) (€)", min_value=0.0, value=108.10, step=0.01, format="%.2f")
 
-# Affichage principal
+# --- MENU HISTORIQUE & REQUÊTES SAUVEGARDÉES ---
+st.sidebar.markdown("---")
+st.sidebar.header("📜 Historique & Archives")
+if st.session_state.trade_history:
+    history_options = ["-- Nouvelle Analyse --"] + [f"{item['id']} | {item['timestamp']} - {item['asset']} ({item['tf']})" for item in st.session_state.trade_history]
+    current_index = 0
+    if st.session_state.active_tab != "new":
+        for idx, opt in enumerate(history_options[1:], start=1):
+            if opt.startswith(f"{st.session_state.active_tab} |"):
+                current_index = idx
+                break
+
+    selected_history = st.sidebar.selectbox("Consulter une archive sauvegardée :", history_options, index=current_index)
+    if selected_history == "-- Nouvelle Analyse --":
+        if st.session_state.active_tab != "new":
+            st.session_state.active_tab = "new"
+            st.session_state.current_analysis = None
+            st.rerun()
+    else:
+        selected_id = int(selected_history.split(" | ")[0])
+        if st.session_state.active_tab != selected_id:
+            st.session_state.active_tab = selected_id
+            st.rerun()
+
+    with st.sidebar.expander("🗑️ Vider l'historique"):
+        if st.button("Tout supprimer", use_container_width=True):
+            st.session_state.trade_history = []
+            st.session_state.active_tab = "new"
+            st.session_state.current_analysis = None
+            st.rerun()
+else:
+    st.sidebar.info("Aucune archive sauvegardée.")
+
+# =========================================================
+# AFFICHAGE PRINCIPAL
+# =========================================================
 if st.session_state.active_tab == "new":
     selected_timeframe = st.selectbox("Unité de temps", list(TIMEFRAME_MAPPING.keys()), index=2)
-    run_analysis = st.button("🚀 Lancer l'Analyse Institutionnelle", type="primary", use_container_width=True)
+    run_analysis = st.button("🚀 Lancer l'Analyse Institutionnelle & Fondamentale", type="primary", use_container_width=True)
 
     if run_analysis:
         tf_info = TIMEFRAME_MAPPING[selected_timeframe]
         df = load_market_data(ticker_symbol, tf_info["period"], tf_info["interval"])
         df_daily = load_market_data(ticker_symbol, "6m", "1d")
+        recent_news_list = get_recent_news(ticker_symbol)
+        news_text = "\n".join(recent_news_list)
 
         if not df.empty and 'Close' in df.columns:
             latest = df.iloc[-1]
             current_price = float(latest['Close']) if custom_entry == 0.0 else custom_entry
             
-            # --- CALCULS EXONÉRÉS DES ERREURS D'ÉCHELLE ---
-            # Distance en points
             tp_points = abs(current_price - custom_tp) if custom_tp > 0 else (3.0 * float(latest.get('High', current_price) - latest.get('Low', current_price)))
             sl_points = abs(current_price - custom_sl) if custom_sl > 0 else (1.5 * float(latest.get('High', current_price) - latest.get('Low', current_price)))
-            
             spread_cost = spread_value * pip_value
 
-            # Si SL/TP personnalisés sont fournis, calcul exact sur la valeur du point
             if custom_entry > 0 and custom_tp > 0:
                 calc_tp_eur = (tp_points * pip_value) - spread_cost
             else:
                 calc_tp_eur = (tp_points * trade_volume * pip_value) - spread_cost
 
             if custom_entry > 0 and custom_sl > 0:
-                # Si SL est au-dessus de l'entrée en SHORT (Gain sécurisé) ou en dessous (Perte)
-                if custom_sl < custom_entry: # SL vendeur en gain sécurisé
+                if custom_sl < custom_entry:
                     calc_sl_eur = (sl_points * pip_value) - spread_cost
-                else: # SL classique en perte
+                else:
                     calc_sl_eur = -(sl_points * pip_value) - spread_cost
             else:
                 calc_sl_eur = -(sl_points * trade_volume * pip_value) - spread_cost
 
-            # Marge requise (Contrat standard Brent approx 1000 barils * volume / levier)
             contract_size = 1000 if "BZ=F" in ticker_symbol or "CL=F" in ticker_symbol else 1
             margin_required_eur = (current_price * trade_volume * contract_size) / leverage_value
 
             mtf_trend = "Baissière 🔴" if not df_daily.empty and df_daily['Close'].iloc[-1] < df_daily['Close'].rolling(50).mean().iloc[-1] else "Haussière 🟢"
 
             prompt = f"""
-            Analyse {selected_asset_name} ({ticker_symbol}) en {selected_timeframe}.
-            Prix d'entrée: {current_price}, TP: {custom_tp}, SL: {custom_sl}.
-            Valeur du Point: {pip_value}€, Volume: {trade_volume}, Levier: 1:{leverage_value}.
+            Tu es un comité d'investissement institutionnel expert. Analyse l'actif **{selected_asset_name} ({ticker_symbol})** en unité de temps **{selected_timeframe}**.
+            
+            ### ACTUALITÉS ET FONDAMENTAUX RÉCENTS :
+            {news_text}
+
+            Fournis un rapport complet structuré STRICTEMENT ainsi :
+            ### 1. 📰 ANALYSE FONDAMENTALE ET MACROÉCONOMIQUE
+            - Présentation de la santé fondamentale globale de l'actif, secteur et marché.
+            - Impact des dernières actualités majeures sur le cours.
+
+            ### 2. 🌐 FILTRE MACRO & TENDANCE MULTI-TIMEFRAME ({mtf_trend})
+            - Cohérence entre fondamentaux et tendance Daily.
+
+            ### 3. 📊 ANALYSE TECHNIQUE & SCORE DE CONFLUENCE (75%)
+            - Lecture des indicateurs et des niveaux clés.
+
+            ### 4. 🎯 PLAN DE TRADE & STRATÉGIE
+            - Recommandation LONG/SHORT avec justification.
             """
 
-            ai_report = generate_ai_report(prompt)
+            with st.spinner("Génération du rapport fondamental et technique..."):
+                ai_report = generate_ai_report(prompt)
 
             st.session_state.current_analysis = {
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
@@ -247,12 +309,13 @@ if st.session_state.active_tab == "new":
                 "tp1_eur": calc_tp_eur,
                 "report": ai_report,
                 "df": df, "pivot": 0, "r1": 0, "r2": 0, "s1": 0, "s2": 0,
+                "news": recent_news_list,
                 "executed": False, "result": "En cours"
             }
 
     if st.session_state.current_analysis:
         ca = st.session_state.current_analysis
-        st.markdown(f"## 📊 Rapport : {ca['asset']} ({ca['tf']}) — {ca['timestamp']}")
+        st.markdown(f"## 📊 Rapport Institutionnel : {ca['asset']} ({ca['tf']}) — {ca['timestamp']}")
 
         m1, m2, m3, m4 = st.columns(4)
         with m1: st.metric("Tendance Daily", ca['mtf_trend'])
@@ -277,4 +340,64 @@ if st.session_state.active_tab == "new":
 
         fig = draw_interactive_chart(ca['df'], 0, 0, 0, 0, 0, ca['asset'], ca['tf'])
         st.plotly_chart(fig, use_container_width=True)
+
+        st.markdown("---")
+        with st.expander("📰 Voir les actualités et analyse fondamentale", expanded=False):
+            for headline in ca['news']:
+                st.write(headline)
+
+        st.markdown("---")
+        st.markdown("### 📋 Synthèse Fondamentale & Plan Stratégique")
         st.markdown(ca['report'])
+
+        st.markdown("---")
+        if st.button("💾 Enregistrer dans l'historique", type="primary", use_container_width=True):
+            new_id = (max([item['id'] for item in st.session_state.trade_history]) + 1) if st.session_state.trade_history else 1
+            ca_to_save = ca.copy()
+            ca_to_save['id'] = new_id
+            st.session_state.trade_history.append(ca_to_save)
+            st.session_state.active_tab = new_id
+            st.session_state.current_analysis = None
+            st.rerun()
+
+else:
+    entry = next((item for item in st.session_state.trade_history if item['id'] == st.session_state.active_tab), None)
+    if entry:
+        if st.button("⬅️ Effectuer une nouvelle analyse"):
+            st.session_state.active_tab = "new"
+            st.session_state.current_analysis = None
+            st.rerun()
+
+        st.markdown(f"## 📜 Archive : {entry['asset']} ({entry['tf']}) — {entry['timestamp']}")
+        
+        m1, m2, m3, m4 = st.columns(4)
+        with m1: st.metric("Tendance Daily", entry['mtf_trend'])
+        with m2: st.metric("Confluence", f"{entry['confluence']}%")
+        with m3: st.metric("Marge Requis", f"{entry.get('margin_eur', 0.0):.2f} €")
+        with m4: st.metric("SL / Gain", f"{entry['risk_eur']:.2f} €")
+
+        st.markdown("### 💰 Calculs Financiers Exacts en Euros (€)")
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown(f"""
+            * **Volume engagé :** `{entry['trade_volume']:.2f} lots`
+            * **Effet de Levier :** `1:{entry.get('leverage', 30)}`
+            * **Marge requise :** `{entry.get('margin_eur', 0.0):.2f} €`
+            * **Valeur du Pip/Point :** `{entry['pip_value']:.2f} €`
+            """)
+        with c2:
+            st.markdown(f"""
+            * **Résultat du Stop Loss (SL) :** `{entry['risk_eur']:.2f} €`
+            * **Gain potentiel Take Profit (TP) :** `🟢 +{entry['tp1_eur']:.2f} €`
+            """)
+
+        fig = draw_interactive_chart(entry['df'], 0, 0, 0, 0, 0, entry['asset'], entry['tf'])
+        st.plotly_chart(fig, use_container_width=True)
+
+        st.markdown("---")
+        st.markdown("### 📊 Rapport d'Analyse Fondamentale & Technique")
+        st.markdown(entry['report'])
+    else:
+        st.session_state.active_tab = "new"
+        st.session_state.current_analysis = None
+        st.rerun()
