@@ -47,11 +47,10 @@ st.markdown("Analyse technique & fondamentale, multi-timeframe incluant le **Sca
 # Liste des clés API Gemini (Nouvelle liste de clés mise à jour)
 # ---------------------------------------------------------
 API_KEYS = [
-    "AQ.Ab8RN6KvFijAko4RVnTWf9Uf3qE4lVbXgrMsTXay1utBmqq5-w",
-    "AQ.Ab8RN6I00i8wi5lYccvl0UHNBkTHAvQ6xZTQC6WQk3dIEOx1JQ",
-    "AQ.Ab8RN6JCQvTU9IjwjDzw6puDfrNtZllbOnggOM69BtXEKgshqg",
-    "AQ.Ab8RN6J07BTFUTUoWBM2cfsiUduTyV756t_c7L6i6SZxY7wgTg",
-    "AIzaSyAm0u7-MLvgzKXczi3uiJ-98XXsIl19M2I"
+    "AQ.Ab8RN6LER8j4XDy5SJbtfV6_cwWRIxnYYl9apPQ5Kf76YtyeiA",
+    "AQ.Ab8RN6J9IGu0uxxlZGo2s-GGGND7nvm0nGv1aRVlaLI5BQL5IA",
+    "AQ.Ab8RN6KRUrOJvrhpyETf5YPhr8VUvlSxyONYFAyUnlbfATTRsQ",
+    "AQ.Ab8RN6I_iXUbNA_CpdjSrI_WBGtBEfx_nfkZCEZfuAXAMLHCgg"
 ]
 
 def generate_ai_report(prompt_text):
