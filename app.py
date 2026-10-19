@@ -41,7 +41,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("🎯 Bot d'Analyse Trading Pro — Suite Institutionnelle")
-st.markdown("Analyse technique & fondamentale, multi-timeframe, score de confluence, calculs financiers précis en € et journal de trading.")
+st.markdown("Analyse technique & fondamentale, multi-timeframe, score de confluence, calculs financiers (marge, levier, pips, SL/TP) et journal de trading.")
 
 # ---------------------------------------------------------
 # Liste des clés API Gemini (Système de rotation / Fallback)
@@ -286,6 +286,7 @@ else:
 st.sidebar.markdown("---")
 st.sidebar.header("⚙️ Paramètres de Position & Risque")
 trade_volume = st.sidebar.number_input("Volume engagé (Lots/Unités)", min_value=0.01, value=0.10, step=0.01, format="%.2f")
+leverage_value = st.sidebar.number_input("Effet de Levier (1:X)", min_value=1, max_value=500, value=30, step=1)
 spread_value = st.sidebar.number_input("Valeur du Spread (pips / pts)", min_value=0.0, value=1.0, step=0.1, format="%.1f")
 pip_value = st.sidebar.number_input("Valeur du Pip (€ / $)", min_value=0.01, value=1.00, step=0.01, format="%.2f")
 
@@ -402,25 +403,21 @@ if st.session_state.active_tab == "new":
                 if current_price <= s1 or current_price >= r1: confluence_score += 20
                 confluence_score = min(98, max(15, confluence_score))
 
-                # --- CALCULS FINANCIERS PRÉCIS EN EUROS ---
-                # Distance SL standard (1.5 * ATR) et TP (2x le risque)
+                # --- CALCULS FINANCIERS PRÉCIS EN EUROS AVEC LEVIER & MARGE ---
                 sl_distance_price = 1.5 * atr_val
                 tp1_distance_price = 3.0 * atr_val
                 tp2_distance_price = 4.5 * atr_val
 
-                # Conversion en pips / points estimés par rapport au prix (supposons 1 point = unité de prix ou pip standard)
-                # Coût du spread en valeur monétaire (€) = spread_value * pip_value * trade_volume
                 spread_cost_eur = spread_value * pip_value * trade_volume
 
-                # Pour le scénario LONG :
-                risk_eur_long = (sl_distance_price * trade_volume * pip_value) + spread_cost_eur
-                tp1_eur_long = (tp1_distance_price * trade_volume * pip_value) - spread_cost_eur
-                tp2_eur_long = (tp2_distance_price * trade_volume * pip_value) - spread_cost_eur
+                risk_eur_val = (sl_distance_price * trade_volume * pip_value) + spread_cost_eur
+                tp1_eur_val = (tp1_distance_price * trade_volume * pip_value) - spread_cost_eur
+                tp2_eur_val = (tp2_distance_price * trade_volume * pip_value) - spread_cost_eur
 
-                # Pour le scénario SHORT :
-                risk_eur_short = (sl_distance_price * trade_volume * pip_value) + spread_cost_eur
-                tp1_eur_short = (tp1_distance_price * trade_volume * pip_value) - spread_cost_eur
-                tp2_eur_short = (tp2_distance_price * trade_volume * pip_value) - spread_cost_eur
+                # Calcul de la Marge Requise en € = (Prix * Volume * Taille standard de contrat / Levier)
+                # Estimation standardisée de l'exposition globale
+                notional_position_val = current_price * trade_volume * 1000 if "EURUSD" in ticker_symbol or "USD" in ticker_symbol else current_price * trade_volume
+                margin_required_eur = notional_position_val / leverage_value if leverage_value > 0 else notional_position_val
 
                 prompt = f"""
                 Tu es un comité d'investissement et un algorithme de trading institutionnel expert.
@@ -428,6 +425,7 @@ if st.session_state.active_tab == "new":
 
                 ### PARAMÈTRES DE POSITION DE L'UTILISATEUR :
                 - Volume engagé : {trade_volume:.2f} lots/unités
+                - Effet de Levier : 1:{leverage_value} (Marge immobilisée estimée : {margin_required_eur:.2f} €)
                 - Valeur du Spread : {spread_value:.1f} pips/pts (Coût fixe estimé : {spread_cost_eur:.2f} €)
                 - Valeur du Pip : {pip_value:.2f} €
 
@@ -463,6 +461,7 @@ if st.session_state.active_tab == "new":
 
                 ### 4. 🎯 PLAN DE TRADE & STRATÉGIE
                 - Recommandation claire (LONG / SHORT / WAIT) avec justification technique et niveaux clés d'entrée, SL et TP.
+                - Recommandations sur la gestion du levier (1:{leverage_value}) et le respect du Capital / Marge.
                 """
 
                 with st.spinner("Génération du rapport par l'IA..."):
@@ -479,11 +478,13 @@ if st.session_state.active_tab == "new":
                     "mtf_trend": mtf_trend,
                     "confluence": confluence_score,
                     "trade_volume": trade_volume,
+                    "leverage": leverage_value,
+                    "margin_eur": margin_required_eur,
                     "spread_value": spread_value,
                     "pip_value": pip_value,
-                    "risk_eur": risk_eur_long,
-                    "tp1_eur": tp1_eur_long,
-                    "tp2_eur": tp2_eur_long,
+                    "risk_eur": risk_eur_val,
+                    "tp1_eur": tp1_eur_val,
+                    "tp2_eur": tp2_eur_val,
                     "report": ai_text,
                     "df": df,
                     "pivot": pivot,
@@ -502,15 +503,16 @@ if st.session_state.active_tab == "new":
         m1, m2, m3, m4 = st.columns(4)
         with m1: st.metric("Tendance Daily", ca['mtf_trend'])
         with m2: st.metric("Confluence", f"{ca['confluence']}%")
-        with m3: st.metric("Risque Max (Perte SL)", f"-{ca['risk_eur']:.2f} €", delta_color="inverse")
-        with m4: st.metric("Gain Potentiel (TP1)", f"+{ca['tp1_eur']:.2f} €", delta_color="normal")
+        with m3: st.metric("Marge Immobilisée", f"{ca.get('margin_eur', 0.0):.2f} €")
+        with m4: st.metric("Risque Max (Perte SL)", f"-{ca['risk_eur']:.2f} €", delta_color="inverse")
 
-        # Section simplifiée et claire des calculs financiers précis en Euros
-        st.markdown("### 💰 Calculs financiers précis (Gains / Pertes en €)")
+        st.markdown("### 💰 Calculs financiers précis (Gains / Pertes & Levier en €)")
         col_calc1, col_calc2 = st.columns(2)
         with col_calc1:
             st.markdown(f"""
             * **Volume engagé :** `{ca['trade_volume']:.2f} lots/unités`
+            * **Effet de Levier choisi :** `1:{ca.get('leverage', 30)}`
+            * **Marge minimale requise :** `{ca.get('margin_eur', 0.0):.2f} €`
             * **Valeur du Pip :** `{ca['pip_value']:.2f} €`
             * **Spread appliqué :** `{ca['spread_value']:.1f} pips/pts`
             """)
@@ -546,7 +548,7 @@ if st.session_state.active_tab == "new":
                 st.session_state.current_analysis = None
                 st.rerun()
         with col_save2:
-            st.info("💡 Cliquez pour archiver l'analyse dans votre historique et accéder au suivi de position et au chat Gemini.")
+            st.info("💡 Cliquez sur le bouton ci-contre pour conserver cette analyse dans votre historique et accéder au suivi de position ainsi qu'au chat Gemini associé.")
 
 else:
     entry = next((item for item in st.session_state.trade_history if item['id'] == st.session_state.active_tab), None)
@@ -557,19 +559,32 @@ else:
             st.session_state.current_analysis = None
             st.rerun()
 
+        # Rétrocompatibilité pour les anciennes archives
+        if "trade_volume" not in entry:
+            entry["trade_volume"] = 0.10
+            entry["leverage"] = 30
+            entry["margin_eur"] = 0.00
+            entry["spread_value"] = 1.0
+            entry["pip_value"] = 1.00
+            entry["risk_eur"] = 15.00
+            entry["tp1_eur"] = 30.00
+            entry["tp2_eur"] = 45.00
+
         st.markdown(f"## 📜 Archive : {entry['asset']} ({entry['tf']}) — {entry['timestamp']}")
         
         m1, m2, m3, m4 = st.columns(4)
         with m1: st.metric("Tendance Daily", entry['mtf_trend'])
         with m2: st.metric("Confluence", f"{entry['confluence']}%")
-        with m3: st.metric("Risque SL", f"-{entry['risk_eur']:.2f} €")
-        with m4: st.metric("Gain TP1", f"+{entry['tp1_eur']:.2f} €")
+        with m3: st.metric("Marge Requis", f"{entry.get('margin_eur', 0.0):.2f} €")
+        with m4: st.metric("Risque SL", f"-{entry['risk_eur']:.2f} €")
 
-        st.markdown("### 💰 Calculs financiers précis (Gains / Pertes en €)")
+        st.markdown("### 💰 Calculs financiers précis (Gains / Pertes & Levier en €)")
         col_calc1, col_calc2 = st.columns(2)
         with col_calc1:
             st.markdown(f"""
             * **Volume engagé :** `{entry['trade_volume']:.2f} lots/unités`
+            * **Effet de Levier choisi :** `1:{entry.get('leverage', 30)}`
+            * **Marge minimale requise :** `{entry.get('margin_eur', 0.0):.2f} €`
             * **Valeur du Pip :** `{entry['pip_value']:.2f} €`
             * **Spread appliqué :** `{entry['spread_value']:.1f} pips/pts`
             """)
@@ -612,14 +627,14 @@ else:
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
 
-        if user_query := st.chat_input("Ex: Quel est l'impact de ce spread sur mon ratio risque/récompense ?", key=f"chat_input_{entry['id']}"):
+        if user_query := st.chat_input("Ex: Quel est l'impact de mon effet de levier sur le risque d'appel de marge ?", key=f"chat_input_{entry['id']}"):
             st.session_state[chat_key].append({"role": "user", "content": user_query})
             with st.chat_message("user"): st.markdown(user_query)
 
             with st.chat_message("assistant"):
                 with st.spinner("Analyse de la question..."):
                     history = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state[chat_key][:-1]])
-                    prompt_chat = f"Contexte actif {entry['asset']} ({entry['ticker']}). Volume: {entry['trade_volume']}, Spread: {entry['spread_value']}, Pip: {entry['pip_value']}. Rapport: {entry['report']}\nHist: {history}\nQuestion: {user_query}"
+                    prompt_chat = f"Contexte actif {entry['asset']} ({entry['ticker']}). Volume: {entry['trade_volume']}, Levier: 1:{entry.get('leverage', 30)}, Spread: {entry['spread_value']}, Pip: {entry['pip_value']}. Rapport: {entry['report']}\nHist: {history}\nQuestion: {user_query}"
                     reply = generate_ai_report(prompt_chat)
                     st.markdown(reply)
                     st.session_state[chat_key].append({"role": "assistant", "content": reply})
