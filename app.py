@@ -3,6 +3,9 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import google.generativeai as genai
+import openai
+from groq import Groq
+from mistralai import Mistral
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 
@@ -41,228 +44,164 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("🎯 Bot d'Analyse Trading Pro — Suite Institutionnelle")
-st.markdown("Analyse technique & fondamentale, multi-timeframe incluant le **Scalping**, score de confluence, gestion du SL en Break-Even et journal de trading.")
+st.markdown("Analyse technique & fondamentale, multi-timeframe incluant le **Scalping**, score de confluence, gestion du SL en Break-Even et journal de trading (avec Fallback Multi-IA).")
 
 # ---------------------------------------------------------
-# Liste des clés API Gemini (Nouvelle liste de clés mise à jour)
+# CONFIGURATION DES CLÉS API (MULTI-FOURNISSEURS)
 # ---------------------------------------------------------
-API_KEYS = [
+GEMINI_API_KEYS = [
     "AQ.Ab8RN6LER8j4XDy5SJbtfV6_cwWRIxnYYl9apPQ5Kf76YtyeiA",
     "AQ.Ab8RN6J9IGu0uxxlZGo2s-GGGND7nvm0nGv1aRVlaLI5BQL5IA",
     "AQ.Ab8RN6KRUrOJvrhpyETf5YPhr8VUvlSxyONYFAyUnlbfATTRsQ",
     "AQ.Ab8RN6I_iXUbNA_CpdjSrI_WBGtBEfx_nfkZCEZfuAXAMLHCgg"
 ]
 
+GROQ_API_KEY = "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"
+MISTRAL_API_KEY = "mstrl_8XeYmMmZVDvUC3Yr79aSGKdb7pOPU7QU_16OSuS"
+OPENAI_API_KEY = "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"
+DEEPSEEK_API_KEY = "sk-1b77d4e7788e4e509baeb79ccb703847"
+
 def generate_ai_report(prompt_text):
-    models_to_try = ['gemini-3.8-flash', 'gemini-1.5-flash', 'gemini-pro']
     error_details = []
 
-    for api_key in API_KEYS:
+    # 1. Tentative sur Gemini (Rotation des clés)
+    models_gemini = ['gemini-1.5-flash', 'gemini-pro', 'gemini-3.8-flash']
+    for api_key in GEMINI_API_KEYS:
         try:
             genai.configure(api_key=api_key)
-            for m_name in models_to_try:
+            for m_name in models_gemini:
                 try:
                     m = genai.GenerativeModel(m_name)
                     response = m.generate_content(prompt_text)
                     if response and response.text:
-                        return response.text
+                        return f"*(Rapport généré via Gemini - {m_name})*\n\n" + response.text
                 except Exception as e:
-                    error_str = str(e)
-                    error_details.append(f"Clé `{api_key[:8]}...` | Modèle `{m_name}` : {error_str}")
-                    if "429" in error_str or "quota" in error_str.lower():
-                        break
+                    error_details.append(f"Gemini (`{api_key[:8]}...`) [{m_name}] : {str(e)}")
         except Exception as e:
-            error_details.append(f"Erreur de configuration clé `{api_key[:8]}...` : {e}")
+            error_details.append(f"Erreur config Gemini (`{api_key[:8]}...`) : {str(e)}")
 
-    return "### ⚠️ Erreur détaillée de l'API Gemini :\n\nToutes les clés API configurées ont dépassé leurs quotas ou ont rencontré une erreur.\n\n" + "\n\n".join(error_details)
+    # 2. Fallback sur GROQ (Llama 3)
+    if GROQ_API_KEY:
+        try:
+            client_groq = Groq(api_key=GROQ_API_KEY)
+            completion = client_groq.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": prompt_text}],
+                temperature=0.3,
+            )
+            if completion.choices[0].message.content:
+                return "*(Rapport généré via Fallback Groq - Llama 3.3)*\n\n" + completion.choices[0].message.content
+        except Exception as e:
+            error_details.append(f"Fallback Groq échoué : {str(e)}")
+
+    # 3. Fallback sur MISTRAL
+    if MISTRAL_API_KEY:
+        try:
+            client_mistral = Mistral(api_key=MISTRAL_API_KEY)
+            res = client_mistral.chat.complete(
+                model="mistral-small-latest",
+                messages=[{"role": "user", "content": prompt_text}]
+            )
+            if res.choices[0].message.content:
+                return "*(Rapport généré via Fallback Mistral)*\n\n" + res.choices[0].message.content
+        except Exception as e:
+            error_details.append(f"Fallback Mistral échoué : {str(e)}")
+
+    # 4. Fallback sur OPENAI (ChatGPT)
+    if OPENAI_API_KEY:
+        try:
+            client_openai = openai.OpenAI(api_key=OPENAI_API_KEY)
+            response = client_openai.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": prompt_text}]
+            )
+            if response.choices[0].message.content:
+                return "*(Rapport généré via Fallback OpenAI - GPT-4o-mini)*\n\n" + response.choices[0].message.content
+        except Exception as e:
+            error_details.append(f"Fallback OpenAI échoué : {str(e)}")
+
+    # 5. Fallback sur DEEPSEEK (Compatible SDK OpenAI)
+    if DEEPSEEK_API_KEY:
+        try:
+            client_deepseek = openai.OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com")
+            response = client_deepseek.chat.completions.create(
+                model="deepseek-chat",
+                messages=[{"role": "user", "content": prompt_text}]
+            )
+            if response.choices[0].message.content:
+                return "*(Rapport généré via Fallback DeepSeek)*\n\n" + response.choices[0].message.content
+        except Exception as e:
+            error_details.append(f"Fallback DeepSeek échoué : {str(e)}")
+
+    return "### ⚠️ Erreur critique de toutes les IA :\n\nToutes les clés Gemini ont échoué et aucun autre fournisseur de secours (Groq, Mistral, OpenAI, DeepSeek) n'a de clé valide renseignée.\n\n" + "\n\n".join(error_details)
 
 # ---------------------------------------------------------
 # Dictionnaire complet et exhaustif (100+ actifs)
 # ---------------------------------------------------------
 ASSETS_DICTIONARY = {
     "🇺🇸 Actions USA (Wall Street)": {
-        "Apple": "AAPL",
-        "Nvidia": "NVDA",
-        "Microsoft": "MSFT",
-        "Amazon": "AMZN",
-        "Alphabet (Google)": "GOOGL",
-        "Meta (Facebook)": "META",
-        "Tesla": "TSLA",
-        "AMD": "AMD",
-        "Netflix": "NFLX",
-        "Intel": "INTC",
-        "JPMorgan Chase": "JPM",
-        "Visa": "V",
-        "Mastercard": "MA",
-        "Bank of America": "BAC",
-        "Coca-Cola": "KO",
-        "PepsiCo": "PEP",
-        "Walt Disney": "DIS",
-        "Nike": "NKE",
-        "Pfizer": "PFE",
-        "Johnson & Johnson": "JNJ",
-        "ExxonMobil": "XOM",
-        "Chevron": "CVX",
-        "Walmart": "WMT",
-        "Palantir": "PLTR",
-        "Super Micro Computer": "SMCI"
+        "Apple": "AAPL", "Nvidia": "NVDA", "Microsoft": "MSFT", "Amazon": "AMZN",
+        "Alphabet (Google)": "GOOGL", "Meta (Facebook)": "META", "Tesla": "TSLA", "AMD": "AMD",
+        "Netflix": "NFLX", "Intel": "INTC", "JPMorgan Chase": "JPM", "Visa": "V",
+        "Mastercard": "MA", "Bank of America": "BAC", "Coca-Cola": "KO", "PepsiCo": "PEP",
+        "Walt Disney": "DIS", "Nike": "NKE", "Pfizer": "PFE", "Johnson & Johnson": "JNJ",
+        "ExxonMobil": "XOM", "Chevron": "CVX", "Walmart": "WMT", "Palantir": "PLTR", "Super Micro Computer": "SMCI"
     },
     "🇪🇺 Actions Europe (Euronext, DAX, LSE)": {
-        "TotalEnergies (France)": "TTE.PA",
-        "LVMH (France)": "MC.PA",
-        "ASML (Pays-Bas)": "ASML.AS",
-        "SAP (Allemagne)": "SAP.DE",
-        "Siemens (Allemagne)": "SIE.DE",
-        "Sanofi (France)": "SAN.PA",
-        "Airbus (France/DE)": "AIR.PA",
-        "L'Oréal (France)": "OR.PA",
-        "Schneider Electric (France)": "SU.PA",
-        "Air Liquide (France)": "AI.PA",
-        "BNP Paribas (France)": "BNP.PA",
-        "AXA (France)": "CS.PA",
-        "Hermès (France)": "RMS.PA",
-        "Kering (France)": "KER.PA",
-        "Stellantis (France/IT)": "STLAM.MI",
-        "Volkswagen (Allemagne)": "VOW3.DE",
-        "Allianz (Allemagne)": "ALV.DE",
-        "Mercedes-Benz (Allemagne)": "MBG.DE",
-        "BASF (Allemagne)": "BAS.DE",
-        "Bayer (Allemagne)": "BAYN.DE",
-        "Unilever (Royaume-Uni)": "ULVR.L",
-        "Shell (Royaume-Uni)": "SHEL.L",
-        "BP (Royaume-Uni)": "BP.L",
-        "HSBC (Royaume-Uni)": "HSBA.L",
-        "Banco Santander (Espagne)": "SAN.MC"
+        "TotalEnergies (France)": "TTE.PA", "LVMH (France)": "MC.PA", "ASML (Pays-Bas)": "ASML.AS",
+        "SAP (Allemagne)": "SAP.DE", "Siemens (Allemagne)": "SIE.DE", "Sanofi (France)": "SAN.PA",
+        "Airbus (France/DE)": "AIR.PA", "L'Oréal (France)": "OR.PA", "Schneider Electric (France)": "SU.PA",
+        "Air Liquide (France)": "AI.PA", "BNP Paribas (France)": "BNP.PA", "AXA (France)": "CS.PA",
+        "Hermès (France)": "RMS.PA", "Kering (France)": "KER.PA", "Stellantis (France/IT)": "STLAM.MI",
+        "Volkswagen (Allemagne)": "VOW3.DE", "Allianz (Allemagne)": "ALV.DE", "Mercedes-Benz (Allemagne)": "MBG.DE",
+        "BASF (Allemagne)": "BAS.DE", "Bayer (Allemagne)": "BAYN.DE", "Unilever (Royaume-Uni)": "ULVR.L",
+        "Shell (Royaume-Uni)": "SHEL.L", "BP (Royaume-Uni)": "BP.L", "HSBC (Royaume-Uni)": "HSBA.L", "Banco Santander (Espagne)": "SAN.MC"
     },
     "🌏 Actions Asie & Pacifique": {
-        "TSMC (Taïwan - ADR US)": "TSM",
-        "Toyota (Japon)": "7203.T",
-        "Sony (Japon)": "6758.T",
-        "Tencent (Hong Kong)": "0700.HK",
-        "Alibaba (Hong Kong)": "9988.HK",
-        "Samsung Electronics (Corée du Sud)": "005930.KS",
-        "SoftBank Group (Japon)": "9984.T",
-        "Nintendo (Japon)": "7974.T",
-        "Mitsubishi UFJ (Japon)": "8306.T",
-        "Keyence (Japon)": "6861.T",
-        "Tokyo Electron (Japon)": "8035.T",
-        "Fast Retailing / Uniqlo (Japon)": "9983.T",
-        "Honda (Japon)": "7267.T",
-        "KDDI (Japon)": "9433.T",
-        "Meituan (Hong Kong)": "3690.HK",
-        "JD.com (Hong Kong)": "9618.HK",
-        "Baidu (Hong Kong)": "9888.HK",
-        "Xiaomi (Hong Kong)": "1810.HK",
-        "BYD Company (Hong Kong)": "1211.HK",
-        "SK Hynix (Corée du Sud)": "000660.KS"
+        "TSMC (Taïwan - ADR US)": "TSM", "Toyota (Japon)": "7203.T", "Sony (Japon)": "6758.T",
+        "Tencent (Hong Kong)": "0700.HK", "Alibaba (Hong Kong)": "9988.HK", "Samsung Electronics (Corée du Sud)": "005930.KS",
+        "SoftBank Group (Japon)": "9984.T", "Nintendo (Japon)": "7974.T", "Mitsubishi UFJ (Japon)": "8306.T",
+        "Keyence (Japon)": "6861.T", "Tokyo Electron (Japon)": "8035.T", "Fast Retailing / Uniqlo (Japon)": "9983.T",
+        "Honda (Japon)": "7267.T", "KDDI (Japon)": "9433.T", "Meituan (Hong Kong)": "3690.HK",
+        "JD.com (Hong Kong)": "9618.HK", "Baidu (Hong Kong)": "9888.HK", "Xiaomi (Hong Kong)": "1810.HK",
+        "BYD Company (Hong Kong)": "1211.HK", "SK Hynix (Corée du Sud)": "000660.KS"
     },
     "📊 Indices Boursiers": {
-        "S&P 500 (USA)": "^GSPC",
-        "Nasdaq 100 (USA)": "^IXIC",
-        "Dow Jones Industrial Average (USA)": "^DJI",
-        "Russell 2000 (USA)": "^RUT",
-        "CAC 40 (France)": "^FCHI",
-        "DAX 40 (Allemagne)": "^GDAXI",
-        "Euro Stoxx 50 (Europe)": "^STOXX50E",
-        "FTSE 100 (Royaume-Uni)": "^FTSE",
-        "IBEX 35 (Espagne)": "^IBEX",
-        "FTSE MIB (Italie)": "FTSEMIB.MI",
-        "AEX (Pays-Bas)": "^AEX",
-        "SMI (Suisse)": "^SSMI",
-        "Nikkei 225 (Japon)": "^N225",
-        "TOPIX (Japon)": "^TOPX",
-        "Hang Seng (Hong Kong)": "^HSI",
-        "Shanghai Composite (Chine)": "000030.SS",
-        "CSI 300 (Chine)": "000300.SS",
-        "Nifty 50 (Inde)": "^NSEI",
-        "BSE Sensex (Inde)": "^BSESN",
-        "ASX 200 (Australie)": "^AXJO",
-        "IBOVESPA (Brésil)": "^BVSP",
-        "IPC Mexico (Mexique)": "^MXX",
-        "FTSE JSE Top 40 (Afrique du Sud)": "^J200.JO",
-        "JSX Composite (Indonésie)": "^JKSE",
-        "STI (Singapour)": "^STI"
+        "S&P 500 (USA)": "^GSPC", "Nasdaq 100 (USA)": "^IXIC", "Dow Jones Industrial Average (USA)": "^DJI",
+        "Russell 2000 (USA)": "^RUT", "CAC 40 (France)": "^FCHI", "DAX 40 (Allemagne)": "^GDAXI",
+        "Euro Stoxx 50 (Europe)": "^STOXX50E", "FTSE 100 (Royaume-Uni)": "^FTSE", "IBEX 35 (Espagne)": "^IBEX",
+        "FTSE MIB (Italie)": "FTSEMIB.MI", "AEX (Pays-Bas)": "^AEX", "SMI (Suisse)": "^SSMI",
+        "Nikkei 225 (Japon)": "^N225", "TOPIX (Japon)": "^TOPX", "Hang Seng (Hong Kong)": "^HSI",
+        "Shanghai Composite (Chine)": "000030.SS", "CSI 300 (Chine)": "000300.SS", "Nifty 50 (Inde)": "^NSEI",
+        "BSE Sensex (Inde)": "^BSESN", "ASX 200 (Australie)": "^AXJO", "IBOVESPA (Brésil)": "^BVSP",
+        "IPC Mexico (Mexique)": "^MXX", "FTSE JSE Top 40 (Afrique du Sud)": "^J200.JO", "JSX Composite (Indonésie)": "^JKSE", "STI (Singapour)": "^STI"
     },
     "🛢️ Matières Premières": {
-        "Pétrole Brent": "BZ=F",
-        "Pétrole WTI (Light Crude)": "CL=F",
-        "Or (Gold)": "GC=F",
-        "Argent (Silver)": "SI=F",
-        "Cuivre (Copper)": "HG=F",
-        "Platinium": "PL=F",
-        "Palladium": "PA=F",
-        "Gaz Naturel (Natural Gas)": "NG=F",
-        "Blé (Wheat)": "ZW=F",
-        "Maïs (Corn)": "ZC=F",
-        "Soja (Soybean)": "ZS=F",
-        "Café (Coffee)": "KC=F",
-        "Sucre (Sugar)": "SB=F",
-        "Cacao (Cocoa)": "CC=F",
-        "Coton (Cotton)": "CT=F",
-        "Aluminium": "ALI=F",
-        "Zinc": "ZNC=F",
-        "Nickel": "NIC=F",
-        "Bétail Vivant (Live Cattle)": "LE=F",
-        "Porc Maigre (Lean Hogs)": "HE=F",
-        "Avoine (Oats)": "ZO=F",
-        "Riz (Rough Rice)": "ZR=F",
-        "Essence RBOB (Gasoline)": "RB=F",
-        "Fioul Domestique (Heating Oil)": "HO=F",
-        "Fer (Iron Ore)": "TIO=F"
+        "Pétrole Brent": "BZ=F", "Pétrole WTI (Light Crude)": "CL=F", "Or (Gold)": "GC=F",
+        "Argent (Silver)": "SI=F", "Cuivre (Copper)": "HG=F", "Platinium": "PL=F", "Palladium": "PA=F",
+        "Gaz Naturel (Natural Gas)": "NG=F", "Blé (Wheat)": "ZW=F", "Maïs (Corn)": "ZC=F", "Soja (Soybean)": "ZS=F",
+        "Café (Coffee)": "KC=F", "Sucre (Sugar)": "SB=F", "Cacao (Cocoa)": "CC=F", "Coton (Cotton)": "CT=F",
+        "Aluminium": "ALI=F", "Zinc": "ZNC=F", "Nickel": "NIC=F", "Bétail Vivant (Live Cattle)": "LE=F",
+        "Porc Maigre (Lean Hogs)": "HE=F", "Avoine (Oats)": "ZO=F", "Riz (Rough Rice)": "ZR=F",
+        "Essence RBOB (Gasoline)": "RB=F", "Fioul Domestique (Heating Oil)": "HO=F", "Fer (Iron Ore)": "TIO=F"
     },
     "💱 Forex (Devises)": {
-        "EUR/USD": "EURUSD=X",
-        "GBP/USD": "GBPUSD=X",
-        "USD/JPY": "USDJPY=X",
-        "USD/CHF": "USDCHF=X",
-        "AUD/USD": "AUDUSD=X",
-        "USD/CAD": "USDCAD=X",
-        "NZD/USD": "NZDUSD=X",
-        "EUR/GBP": "EURGBP=X",
-        "EUR/JPY": "EURJPY=X",
-        "GBP/JPY": "GBPJPY=X",
-        "EUR/CHF": "EURCHF=X",
-        "AUD/JPY": "AUDJPY=X",
-        "EUR/AUD": "EURAUD=X",
-        "EUR/CAD": "EURCAD=X",
-        "GBP/CHF": "GBPCHF=X",
-        "CHF/JPY": "CHFJPY=X",
-        "NZD/JPY": "NZDJPY=X",
-        "AUD/CAD": "AUDCAD=X",
-        "AUD/NZD": "AUDNZD=X",
-        "CAD/JPY": "CADJPY=X",
-        "USD/ZAR": "USDZAR=X",
-        "USD/MXN": "USDMXN=X",
-        "USD/TRY": "USDTRY=X",
-        "USD/BRL": "USDBRL=X",
-        "USD/SEK": "USDSEK=X"
+        "EUR/USD": "EURUSD=X", "GBP/USD": "GBPUSD=X", "USD/JPY": "USDJPY=X", "USD/CHF": "USDCHF=X",
+        "AUD/USD": "AUDUSD=X", "USD/CAD": "USDCAD=X", "NZD/USD": "NZDUSD=X", "EUR/GBP": "EURGBP=X",
+        "EUR/JPY": "EURJPY=X", "GBP/JPY": "GBPJPY=X", "EUR/CHF": "EURCHF=X", "AUD/JPY": "AUDJPY=X",
+        "EUR/AUD": "EURAUD=X", "EUR/CAD": "EURCAD=X", "GBP/CHF": "GBPCHF=X", "CHF/JPY": "CHFJPY=X",
+        "NZD/JPY": "NZDJPY=X", "AUD/CAD": "AUDCAD=X", "AUD/NZD": "AUDNZD=X", "CAD/JPY": "CADJPY=X",
+        "USD/ZAR": "USDZAR=X", "USD/MXN": "USDMXN=X", "USD/TRY": "USDTRY=X", "USD/BRL": "USDBRL=X", "USD/SEK": "USDSEK=X"
     },
     "🪙 Cryptomonnaies": {
-        "Bitcoin (BTC/USD)": "BTC-USD",
-        "Ethereum (ETH/USD)": "ETH-USD",
-        "Solana (SOL-USD)": "SOL-USD",
-        "Binance Coin (BNB/USD)": "BNB-USD",
-        "Ripple (XRP/USD)": "XRP-USD",
-        "Cardano (ADA/USD)": "ADA-USD",
-        "Dogecoin (DOGE/USD)": "DOGE-USD",
-        "Avalanche (AVAX/USD)": "AVAX-USD",
-        "Chainlink (LINK/USD)": "LINK-USD",
-        "Polkadot (DOT/USD)": "DOT-USD",
-        "Polygon (POL/USD)": "POL-USD",
-        "Tron (TRX/USD)": "TRX-USD",
-        "Shiba Inu (SHIB/USD)": "SHIB-USD",
-        "Litecoin (LTC/USD)": "LTC-USD",
-        "Uniswap (UNI/USD)": "UNI-USD",
-        "Cosmos (ATOM/USD)": "ATOM-USD",
-        "Monero (XMR/USD)": "XMR-USD",
-        "Stellar (XLM/USD)": "XLM-USD",
-        "Near Protocol (NEAR/USD)": "NEAR-USD",
-        "Render (RENDER/USD)": "RENDER-USD",
-        "Sui (SUI/USD)": "SUI-USD",
-        "Aptos (APT/USD)": "APT-USD",
-        "Arbitrum (ARB/USD)": "ARB-USD",
-        "Pepe (PEPE/USD)": "PEPE-USD",
-        "Toncoin (TON/USD)": "TON-USD"
+        "Bitcoin (BTC/USD)": "BTC-USD", "Ethereum (ETH/USD)": "ETH-USD", "Solana (SOL-USD)": "SOL-USD",
+        "Binance Coin (BNB/USD)": "BNB-USD", "Ripple (XRP/USD)": "XRP-USD", "Cardano (ADA/USD)": "ADA-USD",
+        "Dogecoin (DOGE/USD)": "DOGE-USD", "Avalanche (AVAX/USD)": "AVAX-USD", "Chainlink (LINK/USD)": "LINK-USD",
+        "Polkadot (DOT/USD)": "DOT-USD", "Polygon (POL/USD)": "POL-USD", "Tron (TRX/USD)": "TRX-USD",
+        "Shiba Inu (SHIB/USD)": "SHIB-USD", "Litecoin (LTC/USD)": "LTC-USD", "Uniswap (UNI/USD)": "UNI-USD",
+        "Cosmos (ATOM/USD)": "ATOM-USD", "Monero (XMR/USD)": "XMR-USD", "Stellar (XLM/USD)": "XLM-USD",
+        "Near Protocol (NEAR/USD)": "NEAR-USD", "Render (RENDER/USD)": "RENDER-USD", "Sui (SUI/USD)": "SUI-USD",
+        "Aptos (APT/USD)": "APT-USD", "Arbitrum (ARB/USD)": "ARB-USD", "Pepe (PEPE/USD)": "PEPE-USD", "Toncoin (TON/USD)": "TON-USD"
     }
 }
 
@@ -347,7 +286,6 @@ def draw_interactive_chart(df, pivot, r1, r2, s1, s2, asset_name, timeframe, zoo
         decreasing=dict(line=dict(color='#ff5252', width=1), fillcolor='#ff5252')
     ))
 
-    # Bandes de Bollinger
     if 'Boll_Upper' in df_reset.columns:
         fig.add_trace(go.Scatter(x=df_reset[date_col], y=df_reset['Boll_Upper'], mode='lines', name='Bollinger Sup', line=dict(color='rgba(100,100,255,0.4)', width=1)))
         fig.add_trace(go.Scatter(x=df_reset[date_col], y=df_reset['Boll_Lower'], mode='lines', name='Bollinger Inf', line=dict(color='rgba(100,100,255,0.4)', width=1), fill='tonexty', fillcolor='rgba(100,100,255,0.03)'))
@@ -559,7 +497,7 @@ if st.session_state.active_tab == "new":
                 - **GESTION DU BREAK-EVEN (BE) :** Précise explicitement à quel niveau exact de prix (ou après quel objectif atteint / nombre de pips gagnés) il convient de déplacer le Stop Loss au point d'entrée (Break-Even) pour sécuriser la position sans risque.
                 """
 
-                with st.spinner("Génération du rapport institutionnel par l'IA..."):
+                with st.spinner("Génération du rapport institutionnel par l'IA (Système de fallback actif)..."):
                     ai_text = generate_ai_report(prompt)
 
                 timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M")
