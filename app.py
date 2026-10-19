@@ -41,7 +41,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("🎯 Bot d'Analyse Trading Pro — Suite Institutionnelle")
-st.markdown("Analyse technique & fondamentale, multi-timeframe, score de confluence, catalogue mondial complet et journal de trading.")
+st.markdown("Analyse technique & fondamentale, multi-timeframe, score de confluence, gestion du SL en Break-Even et journal de trading.")
 
 # ---------------------------------------------------------
 # Liste des clés API Gemini (Système de rotation / Fallback)
@@ -383,7 +383,7 @@ if "current_analysis" not in st.session_state:
     st.session_state.current_analysis = None
 
 # ---------------------------------------------------------
-# Barre latérale : Sélection globale (Sans paramètres de risque)
+# Barre latérale : Sélection globale
 # ---------------------------------------------------------
 st.sidebar.header("1. Sélection de l'Actif")
 
@@ -554,6 +554,7 @@ if st.session_state.active_tab == "new":
                 ### 4. 🎯 PLAN DE TRADE INSTITUTIONNEL
                 - Recommandation claire (LONG / SHORT / WAIT).
                 - Point d'entrée, Stop Loss dynamique (basé sur ATR), et Take Profits (R/R 1:2 minimum).
+                - **GESTION DU BREAK-EVEN (BE) :** Précise explicitement à quel niveau exact de prix (ou après quel objectif atteint / nombre de pips gagnés) il convient de déplacer le Stop Loss au point d'entrée (Break-Even) pour sécuriser la position sans risque.
                 """
 
                 with st.spinner("Génération du rapport institutionnel par l'IA..."):
@@ -664,7 +665,7 @@ else:
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
 
-        if user_query := st.chat_input("Ex: Dois-je sécuriser mes profits à mi-chemin ?", key=f"chat_input_{entry['id']}"):
+        if user_query := st.chat_input("Ex: À quel niveau dois-je déplacer mon SL en BE ?", key=f"chat_input_{entry['id']}"):
             st.session_state[chat_key].append({"role": "user", "content": user_query})
             with st.chat_message("user"): st.markdown(user_query)
 
