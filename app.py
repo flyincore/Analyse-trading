@@ -41,7 +41,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("🎯 Bot d'Analyse Trading Pro — Suite Institutionnelle")
-st.markdown("Analyse technique & fondamentale, multi-timeframe, score de confluence, gestion des risques ATR, catalogue mondial complet et journal de trading.")
+st.markdown("Analyse technique & fondamentale, multi-timeframe, score de confluence, gestion affinée par volume/spread/pip et journal de trading.")
 
 # ---------------------------------------------------------
 # Liste des clés API Gemini (Système de rotation / Fallback)
@@ -345,7 +345,6 @@ def draw_interactive_chart(df, pivot, r1, r2, s1, s2, asset_name, timeframe, zoo
         decreasing=dict(line=dict(color='#ff5252', width=1), fillcolor='#ff5252')
     ))
 
-    # Bandes de Bollinger
     if 'Boll_Upper' in df_reset.columns:
         fig.add_trace(go.Scatter(x=df_reset[date_col], y=df_reset['Boll_Upper'], mode='lines', name='Bollinger Sup', line=dict(color='rgba(100,100,255,0.4)', width=1)))
         fig.add_trace(go.Scatter(x=df_reset[date_col], y=df_reset['Boll_Lower'], mode='lines', name='Bollinger Inf', line=dict(color='rgba(100,100,255,0.4)', width=1), fill='tonexty', fillcolor='rgba(100,100,255,0.03)'))
@@ -383,7 +382,7 @@ if "current_analysis" not in st.session_state:
     st.session_state.current_analysis = None
 
 # ---------------------------------------------------------
-# Barre latérale : Sélection globale & Paramètres de Risque
+# Barre latérale : Sélection globale & Paramètres de Position
 # ---------------------------------------------------------
 st.sidebar.header("1. Sélection de l'Actif")
 
@@ -405,9 +404,10 @@ else:
     st.sidebar.markdown(f"**Ticker Yahoo Finance :** `{ticker_symbol}`")
 
 st.sidebar.markdown("---")
-st.sidebar.header("⚙️ Paramètres de Risque")
-user_capital = st.sidebar.number_input("Capital total (€ / $)", min_value=100.0, value=10000.0, step=500.0)
-risk_pct = st.sidebar.slider("Risque maximal par trade (%)", min_value=0.1, max_value=5.0, value=1.0, step=0.1)
+st.sidebar.header("⚙️ Paramètres de Position & Risque")
+trade_volume = st.sidebar.number_input("Volume engagé (Lots/Unités)", min_value=0.01, value=0.10, step=0.01, format="%.2f")
+spread_value = st.sidebar.number_input("Valeur du Spread (pips / pts)", min_value=0.0, value=1.0, step=0.1, format="%.1f")
+pip_value = st.sidebar.number_input("Valeur du Pip (€ / $)", min_value=0.01, value=1.00, step=0.01, format="%.2f")
 
 # --- Menu Historique ---
 st.sidebar.markdown("---")
@@ -522,13 +522,14 @@ if st.session_state.active_tab == "new":
                 if current_price <= s1 or current_price >= r1: confluence_score += 20
                 confluence_score = min(98, max(15, confluence_score))
 
-                risk_amount = user_capital * (risk_pct / 100.0)
-                sl_distance = 1.5 * atr_val
-                position_size_units = risk_amount / sl_distance if sl_distance > 0 else 0
-
                 prompt = f"""
                 Tu es un comité d'investissement et un algorithme de trading institutionnel expert.
                 Analyse l'actif **{selected_asset_name} ({ticker_symbol})** en unité de temps **{selected_timeframe}**.
+
+                ### PARAMÈTRES DE POSITION DE L'UTILISATEUR :
+                - Volume engagé : {trade_volume:.2f} lots/unités
+                - Valeur du Spread : {spread_value:.1f} pips/pts
+                - Valeur du Pip : {pip_value:.2f} par unité
 
                 ### DONNÉES TECHNIQUES & QUANTITATIVES :
                 - Prix actuel : {current_price:.2f}
@@ -561,9 +562,10 @@ if st.session_state.active_tab == "new":
 
                 ---
 
-                ### 4. 🎯 PLAN DE TRADE INSTITUTIONNEL
+                ### 4. 🎯 PLAN DE TRADE & GAINS/PERTES ESTIMÉS (Basé sur Volume {trade_volume:.2f} et Pip {pip_value:.2f})
                 - Recommandation claire (LONG / SHORT / WAIT).
-                - Point d'entrée recommandé, Stop Loss dynamique (basé sur ATR), et Take Profits (R/R 1:2 minimum).
+                - Point d'entrée recommandé, Stop Loss dynamique, Take Profits.
+                - Calcul précis des gains potentiels (Take Profit 1 & 2) et des pertes potentielles (Stop Loss) en tenant compte du volume engagé, du spread ({spread_value}) et de la valeur du pip.
                 """
 
                 with st.spinner("Génération du rapport par l'IA..."):
@@ -579,9 +581,9 @@ if st.session_state.active_tab == "new":
                     "price": current_price,
                     "mtf_trend": mtf_trend,
                     "confluence": confluence_score,
-                    "atr": atr_val,
-                    "risk_amount": risk_amount,
-                    "position_units": position_size_units,
+                    "trade_volume": trade_volume,
+                    "spread_value": spread_value,
+                    "pip_value": pip_value,
                     "report": ai_text,
                     "df": df,
                     "pivot": pivot,
@@ -600,8 +602,8 @@ if st.session_state.active_tab == "new":
         m1, m2, m3, m4 = st.columns(4)
         with m1: st.metric("Tendance Daily (MTF)", ca['mtf_trend'])
         with m2: st.metric("Score de Confluence", f"{ca['confluence']}%")
-        with m3: st.metric("Risque Financier Alloué", f"{ca['risk_amount']:.2f} €")
-        with m4: st.metric("Unités / Lots conseillés", f"{ca['position_units']:.2f}")
+        with m3: st.metric("Volume Engagé", f"{ca['trade_volume']:.2f} lots")
+        with m4: st.metric("Valeur du Pip", f"{ca['pip_value']:.2f} €")
 
         fig_interactive = draw_interactive_chart(ca['df'], ca['pivot'], ca['r1'], ca['r2'], ca['s1'], ca['s2'], ca['asset'], ca['tf'], zoom_36h=ca['zoom_36h'])
         st.plotly_chart(fig_interactive, use_container_width=True)
@@ -623,7 +625,6 @@ if st.session_state.active_tab == "new":
                 ca_to_save = ca.copy()
                 ca_to_save['id'] = new_id
                 
-                # Ajout direct et verrouillé à l'historique persistent
                 st.session_state.trade_history.append(ca_to_save)
                 st.session_state.active_tab = new_id
                 st.session_state.current_analysis = None
@@ -642,10 +643,11 @@ else:
 
         st.markdown(f"## 📜 Archive : {entry['asset']} ({entry['tf']}) — {entry['timestamp']}")
         
-        m1, m2, m3 = st.columns(3)
+        m1, m2, m3, m4 = st.columns(4)
         with m1: st.metric("Tendance Daily", entry['mtf_trend'])
         with m2: st.metric("Score Confluence", f"{entry['confluence']}%")
-        with m3: st.metric("Prix de référence", f"{entry['price']:.2f}")
+        with m3: st.metric("Volume", f"{entry['trade_volume']:.2f}")
+        with m4: st.metric("Valeur Pip", f"{entry['pip_value']:.2f}")
 
         fig_interactive = draw_interactive_chart(entry['df'], entry['pivot'], entry['r1'], entry['r2'], entry['s1'], entry['s2'], entry['asset'], entry['tf'], zoom_36h=entry['zoom_36h'])
         st.plotly_chart(fig_interactive, use_container_width=True)
@@ -679,14 +681,14 @@ else:
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
 
-        if user_query := st.chat_input("Ex: Quel est le risque fondamental si la banque centrale augmente ses taux ?", key=f"chat_input_{entry['id']}"):
+        if user_query := st.chat_input("Ex: Quel est l'impact de ce spread sur mon ratio risque/récompense ?", key=f"chat_input_{entry['id']}"):
             st.session_state[chat_key].append({"role": "user", "content": user_query})
             with st.chat_message("user"): st.markdown(user_query)
 
             with st.chat_message("assistant"):
                 with st.spinner("Analyse de la question..."):
                     history = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state[chat_key][:-1]])
-                    prompt_chat = f"Contexte actif {entry['asset']} ({entry['ticker']}). Rapport: {entry['report']}\nHist: {history}\nQuestion: {user_query}"
+                    prompt_chat = f"Contexte actif {entry['asset']} ({entry['ticker']}). Volume: {entry['trade_volume']}, Spread: {entry['spread_value']}, Pip: {entry['pip_value']}. Rapport: {entry['report']}\nHist: {history}\nQuestion: {user_query}"
                     reply = generate_ai_report(prompt_chat)
                     st.markdown(reply)
                     st.session_state[chat_key].append({"role": "assistant", "content": reply})
