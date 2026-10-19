@@ -41,7 +41,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("🎯 Bot d'Analyse Trading Pro — Suite Institutionnelle")
-st.markdown("Analyse technique & fondamentale, multi-timeframe, score de confluence, gestion du SL en Break-Even et journal de trading.")
+st.markdown("Analyse technique & fondamentale, multi-timeframe incluant le **Scalping**, score de confluence, gestion du SL en Break-Even et journal de trading.")
 
 # ---------------------------------------------------------
 # Liste des clés API Gemini (Système de rotation / Fallback)
@@ -267,12 +267,13 @@ ASSETS_DICTIONARY = {
 }
 
 TIMEFRAME_MAPPING = {
-    "M15":    {"interval": "15m", "period": "7d"},
-    "H1":     {"interval": "1h",  "period": "30d"},
-    "H4":     {"interval": "1h",  "period": "60d"},
-    "D1":     {"interval": "1d",  "period": "1y"},
-    "1 mois": {"interval": "1mo", "period": "5y"},
-    "1 an":   {"interval": "1mo", "period": "max"}
+    "Scalping": {"interval": "1m",  "period": "1d"},
+    "M15":      {"interval": "15m", "period": "7d"},
+    "H1":       {"interval": "1h",  "period": "30d"},
+    "H4":       {"interval": "1h",  "period": "60d"},
+    "D1":       {"interval": "1d",  "period": "1y"},
+    "1 mois":   {"interval": "1mo", "period": "5y"},
+    "1 an":     {"interval": "1mo", "period": "max"}
 }
 
 @st.cache_data(ttl=300)
@@ -309,10 +310,12 @@ def get_recent_news(ticker_str):
 # ---------------------------------------------------------
 def draw_interactive_chart(df, pivot, r1, r2, s1, s2, asset_name, timeframe, zoom_36h=False):
     df_plot = df.copy()
-    if zoom_36h and timeframe in ["M15", "H1", "H4"]:
+    if zoom_36h and timeframe in ["Scalping", "M15", "H1", "H4"]:
         if isinstance(df_plot.index, pd.DatetimeIndex) and len(df_plot) > 0:
-            cutoff_time = df_plot.index[-1] - timedelta(hours=36)
-            df_plot = df_plot[df_plot.index >= cutoff_time]
+            # Pour le scalping (1m sur 1j), le zoom 36h n'est pas restreint pour voir toute la journée
+            if timeframe != "Scalping":
+                cutoff_time = df_plot.index[-1] - timedelta(hours=36)
+                df_plot = df_plot[df_plot.index >= cutoff_time]
 
     df_reset = df_plot.reset_index()
     date_col = 'Datetime' if 'Datetime' in df_reset.columns else 'Date'
@@ -519,7 +522,7 @@ if st.session_state.active_tab == "new":
 
                 prompt = f"""
                 Tu es un comité d'investissement et un algorithme de trading institutionnel expert.
-                Analyse l'actif **{selected_asset_name} ({ticker_symbol})** en unité de temps **{selected_timeframe}**.
+                Analyse l'actif **{selected_asset_name} ({ticker_symbol})** en unité de temps **{selected_timeframe}** (Configuration spécifique Scalping / Intraday court si sélectionné).
 
                 ### DONNÉES TECHNIQUES & QUANTITATIVES :
                 - Prix actuel : {current_price:.2f}
@@ -547,13 +550,13 @@ if st.session_state.active_tab == "new":
                 ---
 
                 ### 3. 📊 ANALYSE TECHNIQUE & SCORE DE CONFLUENCE ({confluence_score}%)
-                - Interprétation des indicateurs (RSI, ATR, Bollinger) et des niveaux Fibonacci.
+                - Interprétation des indicateurs (RSI, ATR, Bollinger) et des niveaux Fibonacci adaptés au style de trading ({selected_timeframe}).
 
                 ---
 
                 ### 4. 🎯 PLAN DE TRADE INSTITUTIONNEL
                 - Recommandation claire (LONG / SHORT / WAIT).
-                - Point d'entrée, Stop Loss dynamique (basé sur ATR), et Take Profits (R/R 1:2 minimum).
+                - Point d'entrée, Stop Loss dynamique, et Take Profits.
                 - **GESTION DU BREAK-EVEN (BE) :** Précise explicitement à quel niveau exact de prix (ou après quel objectif atteint / nombre de pips gagnés) il convient de déplacer le Stop Loss au point d'entrée (Break-Even) pour sécuriser la position sans risque.
                 """
 
