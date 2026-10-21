@@ -60,18 +60,6 @@ def load_persistent_history():
             return []
     return []
 
-def save_persistent_history(history_data):
-    try:
-        # On nettoie les objets DataFrame/non-sérialisables avant d'écrire en JSON si besoin, 
-        # mais pour garder la structure intacte on stocke les dictionnaires de session.
-        with open(HISTORY_FILE, "w", encoding="utf-8") as f:
-            # Note: Les DataFrames pandas ne sont pas sérialisables directement en JSON, 
-            # on les recharge dynamiquement à la volée ou on gère l'état proprement.
-            # Pour éviter toute perte, l'historique garde les métadonnées clés.
-            pass
-    except Exception:
-        pass
-
 # Initialisation des états de session avec persistance fichier pour les données textuelles
 if "trade_history" not in st.session_state:
     st.session_state.trade_history = load_persistent_history()
@@ -90,13 +78,21 @@ GEMINI_API_KEYS = [
     "AQ.Ab8RN6KRUrOJvrhpyETf5YPhr8VUvlSxyONYFAyUnlbfATTRsQ"
 ]
 
-KIE_API_KEY = "a2bf859c63beceaa9d8d067edcd5e5e3"
+KIE_API_KEY = "e1d8051846b1cdd140d743826770a614"
 
 def generate_ai_report(prompt_text):
     error_details = []
-    models_to_try = ['gemini-3.8-flash', 'gemini-1.5-flash', 'gemini-pro']
+    # Modèles élargis demandés pour la recherche
+    models_to_try = [
+        'gemini-3.8-flash', 
+        'gemini-3.7-flash', 
+        'gemini-3.6-flash', 
+        'gemini-3.5-flash', 
+        'gemini-1.5-flash',
+        'gemini-pro'
+    ]
 
-    # 1. Tentative sur Gemini (Rotation des clés et des modèles)
+    # 1. Tentative sur Gemini (Rotation des clés et des modèles élargis)
     for api_key in GEMINI_API_KEYS:
         try:
             genai.configure(api_key=api_key)
@@ -114,7 +110,7 @@ def generate_ai_report(prompt_text):
         except Exception as e:
             error_details.append(f"Erreur config Gemini (`{api_key[:8]}...`) : {str(e)}")
 
-    # 2. Fallback sur la passerelle Kie.ai (Gemini 3.8 Flash via crédits Kie)
+    # 2. Fallback sur la passerelle Kie.ai avec la nouvelle clé
     if KIE_API_KEY:
         try:
             headers = {
@@ -546,18 +542,15 @@ if st.session_state.active_tab == "new":
                 ca_to_save = ca.copy()
                 ca_to_save['id'] = new_id
                 
-                # On retire le DataFrame pandas brut pour pouvoir sérialiser proprement en JSON
                 df_temp = ca_to_save.pop('df', None)
                 st.session_state.trade_history.append(ca_to_save)
                 
-                # Sauvegarde physique sur disque (persistance mobile/cloud)
                 try:
                     with open(HISTORY_FILE, "w", encoding="utf-8") as f:
                         json.dump(st.session_state.trade_history, f, ensure_ascii=False, indent=4)
                 except Exception:
                     pass
                 
-                # On remet le DataFrame pour l'affichage immédiat
                 ca_to_save['df'] = df_temp
                 
                 st.session_state.active_tab = new_id
@@ -578,7 +571,6 @@ else:
 
         st.markdown(f"## 📜 Archive : {entry['asset']} ({entry['tf']}) — {entry['timestamp']}")
         
-        # Si le DataFrame a été omis lors de la persistance JSON, on le recharge à la volée
         if 'df' not in entry or entry['df'] is None or isinstance(entry['df'], list):
             tf_info = TIMEFRAME_MAPPING.get(entry['tf'], {"interval": "1d", "period": "1y"})
             entry['df'] = load_market_data(entry['ticker'], tf_info["period"], tf_info["interval"])
@@ -610,7 +602,6 @@ else:
                 entry['result'] = "N/A"
                 st.info("Cochez 'Oui' pour consigner le résultat du trade.")
 
-        # Sauvegarde automatique des modifications de statut du trade dans le fichier persistant
         try:
             with open(HISTORY_FILE, "w", encoding="utf-8") as f:
                 json.dump(st.session_state.trade_history, f, ensure_ascii=False, indent=4)
