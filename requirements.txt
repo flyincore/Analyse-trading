@@ -1,9 +1,8 @@
+google-generativeai
 streamlit
 yfinance
 pandas
 numpy
-google-generativeai
-openai
-groq
-mistralai
+requests
 plotly
+supabase
