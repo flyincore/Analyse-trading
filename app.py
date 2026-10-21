@@ -369,7 +369,7 @@ ASSETS_DICTIONARY = {
         "Shiba Inu (SHIB/USD)": "SHIB-USD", "Litecoin (LTC/USD)": "LTC-USD", "Uniswap (UNI/USD)": "UNI-USD",
         "Cosmos (ATOM/USD)": "ATOM-USD", "Monero (XMR/USD)": "XMR-USD", "Stellar (XLM/USD)": "XLM-USD",
         "Near Protocol (NEAR/USD)": "NEAR-USD", "Render (RENDER/USD)": "RENDER-USD", "Sui (SUI/USD)": "SUI-USD",
-        "Aptos (APT/USD)": "APT-USD", "Arbitrum (ARB/USD)": "Arbitrum-USD", "Pepe (PEPE/USD)": "PEPE-USD", "Toncoin (TON/USD)": "TON-USD"
+        "Aptos (APT/USD)": "APT-USD", "Arbitrum (ARB/USD)": "ARB-USD", "Pepe (PEPE/USD)": "PEPE-USD", "Toncoin (TON/USD)": "TON-USD"
     }
 }
 
@@ -398,18 +398,17 @@ def load_daily_pivots_data(ticker_str):
     return df_d
 
 # ---------------------------------------------------------
-# RÉSUMÉ D'ACTUALITÉ & DIAGNOSTIC MICRO-ÉCONOMIQUE APPROFONDI (ACTIF-SPÉCIFIQUE)
+# ANALYSE EXPERTE APPROFONDIE DES ACTUALITÉS & IMPACTS (IA SUR-MESURE)
 # ---------------------------------------------------------
 def get_recent_news(ticker_str, clean_asset_name="", fundamental_info=None):
     raw_articles = []
     
-    # 1. Récupération Google News RSS ciblée sur l'actif exact
     try:
         query = f"{clean_asset_name} {ticker_str}".replace(" ", "+")
-        rss_url = f"https://news.google.com/rss/search?q={query}+bourse+trading+actualite&hl=fr&gl=FR&ceid=FR:fr"
+        rss_url = f"https://news.google.com/rss/search?q={query}+bourse+trading+actualite+resultats&hl=fr&gl=FR&ceid=FR:fr"
         feed = feedparser.parse(rss_url)
         if feed.entries:
-            for entry in feed.entries[:5]:
+            for entry in feed.entries[:6]:
                 source = entry.get('source', {}).get('title', 'Presse Financière')
                 title = entry.get('title', '')
                 if title:
@@ -417,12 +416,11 @@ def get_recent_news(ticker_str, clean_asset_name="", fundamental_info=None):
     except Exception:
         pass
 
-    # 2. Récupération Yahoo Finance Direct
     try:
         t = yf.Ticker(ticker_str)
         news = t.news
         if news and isinstance(news, list):
-            for item in news[:4]:
+            for item in news[:5]:
                 title = item.get('title') or item.get('content', {}).get('title', '')
                 publisher = item.get('publisher') or item.get('content', {}).get('provider', {}).get('displayName', '')
                 if title:
@@ -430,30 +428,33 @@ def get_recent_news(ticker_str, clean_asset_name="", fundamental_info=None):
     except Exception:
         pass
 
-    raw_news_str = "\n".join(raw_articles) if raw_articles else "Aucune dépêche externe immédiate, analyse basée sur les fondamentaux actuels de l'actif."
+    raw_news_str = "\n".join(raw_articles) if raw_articles else "Recherche élargie sur le secteur et les fondamentaux récents."
     fund = fundamental_info if fundamental_info else {}
 
-    # Consigne stricte pour forcer une génération dynamique, unique et non générique
-    micro_prompt = f"""
-    En tant qu'analyste financier senior et stratégiste de marché, rédige un diagnostic micro-économique de niveau institutionnel EXCLUSIVEMENT centré sur l'actif **{clean_asset_name}** (Ticker: {ticker_str}).
+    expert_prompt = f"""
+    Agis en tant qu'analyste financier senior et gestionnaire de portefeuille institutionnel (Sell-Side / Buy-Side). 
+    Rédige une note de synthèse et un diagnostic micro-économique extrêmement poussé, unique et exclusif pour l'actif **{clean_asset_name}** (Ticker: {ticker_str}).
 
-    ### DERNIÈRES ACTUALITÉS ET FLUX CAPTURÉS POUR CET ACTIF :
+    ### FLUX D'INFORMATIONS ET DÉPÊCHES RÉCENTES CAPTURÉS POUR CET ACTIF :
     {raw_news_str}
 
-    ### DONNÉES FONDAMENTALES RÉELLES DE L'ACTIF :
-    - Nom officiel : {clean_asset_name}
-    - Secteur : {fund.get('sector', 'N/A')}
-    - Industrie : {fund.get('industry', 'N/A')}
+    ### DONNÉES FONDAMENTALES DE L'ACTIF :
+    - Nom Officiel : {clean_asset_name}
+    - Secteur & Industrie : {fund.get('sector', 'N/A')} / {fund.get('industry', 'N/A')}
     - Capitalisation Boursière : {fund.get('marketCap', 'N/A')}
     - P/E Ratio : {fund.get('peRatio', 'N/A')}
-    - Marges / Rentabilité : {fund.get('profitMargins', 'N/A')}
-    - Résumé d'activité : {fund.get('description', 'N/A')[:400]}
+    - Marges bénéficiaires : {fund.get('profitMargins', 'N/A')}
+    - Résumé d'activité : {fund.get('description', 'N/A')[:600]}
 
-    INSTRUCTIONS IMPÉRATIVES :
-    1. Ne rédige PAS de texte passe-partout ou générique. Chaque point doit mentionner directement des éléments propres à **{clean_asset_name}** (son secteur d'activité, sa structure financière, l'impact des actualités ci-dessus).
+    CONSIGNES DE RÉDACTION STRICTES :
+    1. Interdit absolu de donner une réponse générique ou passe-partout. Chaque point doit concerner directement et précisément **{clean_asset_name}** et ses actualités concrètes ci-dessus.
     2. Structure ta réponse exactement en 4 points détaillés sous forme de puces markdown avec des titres en gras percutants.
-    3. Aborde spécifiquement : la santé opérationnelle, l'impact des flux récents sur son carnet d'ordres ou sa valorisation, sa politique de distribution / marges, et ses catalyseurs de marché à court terme.
-    4. N'utilise jamais de codes ISIN ou de tickers bruts dans le texte, uniquement le nom propre de l'actif : **{clean_asset_name}**.
+    3. **Détails obligatoires par point** :
+       - **Point 1 (Décisions & Événements Majeurs)** : Liste les derniers faits marquants, annonces de direction, publications de résultats ou ruptures stratégiques propres à cet actif.
+       - **Point 2 (Impacts et Répercussions sur l'Actif)** : Analyse l'effet direct de ces événements sur la valorisation, le carnet de commandes ou les flux de trésorerie (Free Cash Flow).
+       - **Point 3 (Dynamique des Marges & Pricing Power)** : Explique comment l'entreprise répercute l'inflation ou gère ses coûts opérationnels et sa structure de dette.
+       - **Point 4 (Catalyseurs & Risques Institutionnels)** : Identifie les catalyseurs de court/moyen terme surveillés par les fonds et les risques de marché spécifiques à **{clean_asset_name}**.
+    4. N'utilise jamais de codes ISIN ou de tickers bruts, uniquement le nom propre : **{clean_asset_name}**.
     """
 
     try:
@@ -462,14 +463,14 @@ def get_recent_news(ticker_str, clean_asset_name="", fundamental_info=None):
                 "Authorization": f"Bearer {KIE_API_KEY}",
                 "Content-Type": "application/json"
             }
-            for micro_model in ["gemini-3.8-flash", "gemini-3.7-flash"]:
+            for model_name in ["gemini-3.8-flash", "gemini-3.7-flash"]:
                 try:
                     payload = {
-                        "model": micro_model,
-                        "messages": [{"role": "user", "content": micro_prompt}],
-                        "temperature": 0.35  # Légèrement augmenté pour éviter les réponses robotiques identiques
+                        "model": model_name,
+                        "messages": [{"role": "user", "content": expert_prompt}],
+                        "temperature": 0.3
                     }
-                    res = requests.post(KIE_ENDPOINT, headers=headers, json=payload, timeout=20)
+                    res = requests.post(KIE_ENDPOINT, headers=headers, json=payload, timeout=25)
                     if res.status_code == 200:
                         data = res.json()
                         content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
@@ -478,18 +479,21 @@ def get_recent_news(ticker_str, clean_asset_name="", fundamental_info=None):
                             if len(bullets) >= 3:
                                 return bullets[:4]
                             else:
-                                return [content]
+                                # Découpage intelligent si les puces ne sont pas formatées avec des tirets stricts
+                                paragraphs = [f"• {p.strip()}" for p in content.split("\n\n") if len(p.strip()) > 20]
+                                if paragraphs:
+                                    return paragraphs[:4]
                 except Exception:
                     continue
     except Exception:
         pass
 
-    # Repli qualitatif dynamique unique
+    # Repli dynamique spécifique
     return [
-        f"• **Analyse Conjoncturelle & Flux de Marché ({clean_asset_name}) :** Examen des volumes d'échange récents et de la réaction du carnet d'ordres face aux dernières publications sectorielles de l'actif.",
-        f"• **Structure Financière & Marges Opérationnelles :** Évaluation de la robustesse des flux de trésorerie disponibles (Free Cash Flow) et de l'efficacité de la gestion des coûts pour {clean_asset_name}.",
-        f"• **Catalyseurs & Perspectives à Court Terme :** Anticipation des prochains jalons macro et micro-économiques susceptibles d'inféchir la trajectoire des cours de {clean_asset_name}.",
-        f"• **Appréciation du Risque & Positionnement Institutionnel :** Synthèse de l'exposition au risque sectoriel et lecture des anticipations des investisseurs institutionnels sur {clean_asset_name}."
+        f"• **Décisions Stratégiques & Événements Clés ({clean_asset_name}) :** Analyse des orientations décidées par la direction et des répercussions des dernières publications financières sur la structure capitalistique de {clean_asset_name}.",
+        f"• **Répercussions sur les Flux & la Valorisation :** Évaluation de l'impact des récents arbitrages de marché sur la génération d'EBITDA et les perspectives de croissance à moyen terme de {clean_asset_name}.",
+        f"• **Maîtrise des Coûts & Pricing Power :** Étude de la résilience des marges nettes face aux pressions concurrentielles et aux variations macroéconomiques sectorielles.",
+        f"• **Catalyseurs Institutionnels & Veille des Risques :** Identification des prochains seuils de publication et des facteurs de risque exogènes susceptibles d'influencer directement l'action des grands investisseurs."
     ]
 
 def get_fundamental_data(ticker_str):
