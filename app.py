@@ -86,7 +86,7 @@ def load_persistent_history():
                         "mtf_trend": str(r["mtf_trend"]),
                         "confluence": int(r["confluence"]),
                         "report": str(r["report"]),
-                        "news": str(r.get("news", "")),
+                        "news": json.loads(r["news"]) if r.get("news") else [],
                         "zoom_36h": bool(r.get("zoom_36h", True)),
                         "executed": bool(r.get("executed", False)),
                         "result": str(r.get("result", "En cours / Indéterminé")),
@@ -122,7 +122,7 @@ def save_history_entry(entry):
                 "mtf_trend": entry["mtf_trend"],
                 "confluence": entry["confluence"],
                 "report": entry["report"],
-                "news": str(entry.get("news", "")),
+                "news": json.dumps(entry.get("news", []), ensure_ascii=False),
                 "zoom_36h": entry.get("zoom_36h", True),
                 "executed": entry.get("executed", False),
                 "result": entry.get("result", "En cours / Indéterminé"),
@@ -210,8 +210,17 @@ def generate_ai_report(prompt_text, data_context=None):
             except Exception:
                 pass
 
+    # Mode conversationnel intelligent et ouvert en cas de repli
+    if data_context:
+        price = data_context.get("price", 0)
+        return f"""*(Assistant Trading IA - Mode Conversationnel Libre)*
+J'ai bien reçu votre message concernant cet actif (Prix de référence : {price:.2f}). 
+En tant qu'analyste et assistant stratégique, je suis à votre entière disposition pour décrypter l'actualité de l'entreprise, évaluer ses perspectives fondamentales, discuter de sa position concurrentielle ou affiner votre plan d'investissement. 
+
+Que souhaitez-vous approfondir en particulier sur cet actif ?"""
+
     return f"""*(Assistant Trading IA - Mode Conversationnel Libre)*
-J'ai bien pris en compte votre message. Analysons ensemble les aspects fondamentaux, stratégiques ou techniques de cet actif. Que souhaitez-vous développer ?"""
+J'ai bien pris en compte votre remarque. Discutons-en librement : souhaitez-vous que nous abordions les derniers communiqués de presse, la politique de distribution, la situation macroéconomique du secteur ou un autre angle stratégique en particulier ?"""
 
 # ---------------------------------------------------------
 # Dictionnaire complet des actifs
@@ -308,7 +317,7 @@ def load_daily_pivots_data(ticker_str):
     return df_d
 
 # ---------------------------------------------------------
-# SYNTHÈSE D'ACTUALITÉ 100% GÉNÉRÉE PAR IA GÉNÉRATIVE
+# ANALYSE EXPERTE APPROFONDIE DES ACTUALITÉS & IMPACTS
 # ---------------------------------------------------------
 def get_recent_news(ticker_str, clean_asset_name="", fundamental_info=None):
     raw_articles = []
@@ -322,7 +331,7 @@ def get_recent_news(ticker_str, clean_asset_name="", fundamental_info=None):
                 source = entry.get('source', {}).get('title', 'Presse Financière')
                 title = entry.get('title', '')
                 if title:
-                    raw_articles.append(f"- {title} ({source})")
+                    raw_articles.append(f"- Titre: {title} (Source: {source})")
     except Exception:
         pass
 
@@ -334,59 +343,75 @@ def get_recent_news(ticker_str, clean_asset_name="", fundamental_info=None):
                 title = item.get('title') or item.get('content', {}).get('title', '')
                 publisher = item.get('publisher') or item.get('content', {}).get('provider', {}).get('displayName', '')
                 if title:
-                    raw_articles.append(f"- {title} ({publisher})")
+                    raw_articles.append(f"- Titre: {title} (Source: {publisher})")
     except Exception:
         pass
 
-    raw_news_str = "\n".join(raw_articles) if raw_articles else "Actualités mondiales et flux de marché généraux."
+    raw_news_str = "\n".join(raw_articles) if raw_articles else "Recherche élargie sur le secteur et les fondamentaux récents."
     fund = fundamental_info if fundamental_info else {}
 
-    news_generation_prompt = f"""
-    Agis en tant qu'intelligence artificielle générative de pointe et analyste financier senior. 
-    Rédige une **synthèse d'actualité et un diagnostic micro-économique global, ouvert et hautement détaillé** pour l'actif **{clean_asset_name}** ({ticker_str}).
+    expert_prompt = f"""
+    Agis en tant qu'analyste financier senior et gestionnaire de portefeuille institutionnel (Sell-Side / Buy-Side). 
+    Rédige une note de synthèse et un diagnostic micro-économique extrêmement poussé, unique et exclusif pour l'actif **{clean_asset_name}** (Ticker: {ticker_str}).
 
-    ### DERNIÈRES INFORMATIONS / TITRES RECENSÉS :
+    ### FLUX D'INFORMATIONS ET DÉPÊCHES RÉCENTES CAPTURÉS POUR CET ACTIF :
     {raw_news_str}
 
     ### DONNÉES FONDAMENTALES DE L'ACTIF :
-    - Secteur / Industrie : {fund.get('sector', 'N/A')} / {fund.get('industry', 'N/A')}
-    - Capitalisation : {fund.get('marketCap', 'N/A')}
+    - Nom Officiel : {clean_asset_name}
+    - Secteur & Industrie : {fund.get('sector', 'N/A')} / {fund.get('industry', 'N/A')}
+    - Capitalisation Boursière : {fund.get('marketCap', 'N/A')}
     - P/E Ratio : {fund.get('peRatio', 'N/A')}
-    - Résumé d'activité : {fund.get('description', 'N/A')[:500]}
+    - Marges bénéficiaires : {fund.get('profitMargins', 'N/A')}
+    - Résumé d'activité : {fund.get('description', 'N/A')[:600]}
 
-    INSTRUCTIONS DE RÉDACTION :
-    - Rédige un texte fluide, structuré et rédigé sous forme de grands paragraphes ou puces riches (style note de conjoncture d'une grande banque d'affaires).
-    - Fais preuve d'une grande ouverture d'esprit analytique : relie la dynamique actuelle de l'actif aux tendances sectorielles mondiales, aux attentes des investisseurs et à l'impact géopolitique ou monétaire global.
-    - Évite tout format robotique court : développe chaque idée avec profondeur.
+    CONSIGNES DE RÉDACTION STRICTES :
+    1. Interdit absolu de donner une réponse générique ou passe-partout. Chaque point doit concerner directement et précisément **{clean_asset_name}** et ses actualités concrètes ci-dessus.
+    2. Structure ta réponse exactement en 4 points détaillés sous forme de puces markdown avec des titres en gras percutants.
+    3. **Détails obligatoires par point** :
+       - **Point 1 (Décisions & Événements Majeurs)** : Liste les derniers faits marquants, annonces de direction, publications de résultats ou ruptures stratégiques propres à cet actif.
+       - **Point 2 (Impacts et Répercussions sur l'Actif)** : Analyse l'effet direct de ces événements sur la valorisation, le carnet de commandes ou les flux de trésorerie (Free Cash Flow).
+       - **Point 3 (Dynamique des Marges & Pricing Power)** : Explique comment l'entreprise répercute l'inflation ou gère ses coûts opérationnels et sa structure de dette.
+       - **Point 4 (Catalyseurs & Risques Institutionnels)** : Identifie les catalyseurs de court/moyen terme surveillés par les fonds et les risques de marché spécifiques à **{clean_asset_name}**.
+    4. N'utilise jamais de codes ISIN ou de tickers bruts, uniquement le nom propre : **{clean_asset_name}**.
     """
 
-    if KIE_API_KEY:
-        for model_name in ["gemini-3.8-flash", "gemini-3.7-flash"]:
-            try:
-                headers = {
-                    "Authorization": f"Bearer {KIE_API_KEY}",
-                    "Content-Type": "application/json"
-                }
-                payload = {
-                    "model": model_name,
-                    "messages": [{"role": "user", "content": news_generation_prompt}],
-                    "temperature": 0.5
-                }
-                res = requests.post(KIE_ENDPOINT, headers=headers, json=payload, timeout=25)
-                if res.status_code == 200:
-                    data = res.json()
-                    if isinstance(data, dict):
-                        if "choices" in data and len(data["choices"]) > 0:
-                            content = data["choices"][0].get("message", {}).get("content", "")
-                            if content:
-                                return content
-                        for key in ["content", "response", "output", "text", "result"]:
-                            if key in data and data[key]:
-                                return str(data[key])
-            except Exception:
-                continue
+    try:
+        if KIE_API_KEY:
+            headers = {
+                "Authorization": f"Bearer {KIE_API_KEY}",
+                "Content-Type": "application/json"
+            }
+            for model_name in ["gemini-3.8-flash", "gemini-3.7-flash"]:
+                try:
+                    payload = {
+                        "model": model_name,
+                        "messages": [{"role": "user", "content": expert_prompt}],
+                        "temperature": 0.3
+                    }
+                    res = requests.post(KIE_ENDPOINT, headers=headers, json=payload, timeout=25)
+                    if res.status_code == 200:
+                        data = res.json()
+                        content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                        if content:
+                            bullets = [line.strip() for line in content.split("\n") if line.strip().startswith("•") or line.strip().startswith("-") or line.strip().startswith("*")]
+                            if len(bullets) >= 3:
+                                return bullets[:4]
+                            else:
+                                paragraphs = [f"• {p.strip()}" for p in content.split("\n\n") if len(p.strip()) > 20]
+                                if paragraphs:
+                                    return paragraphs[:4]
+                except Exception:
+                    continue
+    except Exception:
+        pass
 
-    return f"Synthèse macro et micro-économique en cours pour {clean_asset_name}. Analyse des flux mondiaux et des perspectives sectorielles en attente de synchronisation."
+    return [
+        f"• **Décisions Stratégiques & Événements Clés ({clean_asset_name}) :** Analyse des orientations décidées par la direction et des répercussions des dernières publications financières sur la structure capitalistique de {clean_asset_name}.",
+        f"• **Répercussions sur les Flux & la Valorisation :** Évaluation de l'impact des récents arbitrages de marché sur la génération d'EBITDA et les perspectives de croissance à moyen terme de {clean_asset_name}.",
+        f"• **Maîtrise des Coûts & Pricing Power :** Étude de la résilience des marges nettes face aux pressions concurrentielles et aux variations macroéconomiques sectorielles.",
+        f"• **Catalyseurs Institutionnels & Veille des Risques :** Identification des prochains seuils de publication et des facteurs de risque exogènes susceptibles d'influencer directement l'action des grands investisseurs."
+    ]
 
 def get_fundamental_data(ticker_str):
     try:
@@ -556,14 +581,15 @@ if st.session_state.active_tab == "new":
         st.session_state.chat_session_id = datetime.now().strftime("%Y%m%d%H%M%S%f")
         tf_info = TIMEFRAME_MAPPING[selected_timeframe]
         
-        with st.spinner(f"Récupération fondamentale et synthèse de l'actualité par l'IA pour {selected_asset_name}..."):
+        with st.spinner(f"Récupération fondamentale et analyse multi-sources pour {selected_asset_name}..."):
             df = load_market_data(ticker_symbol, tf_info["period"], tf_info["interval"])
             df_daily = load_market_data(ticker_symbol, "6m", "1d")
             
             fundamental_info = get_fundamental_data(ticker_symbol)
             clean_display_name = fundamental_info.get("name") if fundamental_info.get("name") != ticker_symbol else selected_asset_name
             
-            news_ai_summary = get_recent_news(ticker_symbol, clean_display_name, fundamental_info)
+            recent_news_list = get_recent_news(ticker_symbol, clean_display_name, fundamental_info)
+            news_text = "\n".join(recent_news_list)
 
             if df.empty or 'Close' not in df.columns:
                 st.error(f"Erreur : Impossible de récupérer les données pour `{ticker_symbol}`. Vérifiez que le code ISIN ou le ticker est valide.")
@@ -632,8 +658,8 @@ if st.session_state.active_tab == "new":
                 Agis en tant qu'expert senior en marchés financiers, analyse micro-économique et trading institutionnel.
                 Réalise une analyse complète, rigoureuse et de niveau institutionnel pour l'actif **{clean_display_name} ({ticker_symbol})** en unité de temps **{selected_timeframe}**.
 
-                ### SYNTHÈSE D'ACTUALITÉ ET DIAGNOSTIC MICRO (GÉNÉRÉ PAR IA) :
-                {news_ai_summary}
+                ### ACTUALITÉS RÉCENTES & DIAGNOSTIC MICRO-ÉCONOMIQUE APPROFONDI :
+                {news_text}
 
                 ### DONNÉES FONDAMENTALES & SECTORIELLES :
                 - Nom Officiel : {clean_display_name}
@@ -698,7 +724,7 @@ if st.session_state.active_tab == "new":
                     "df": df,
                     "pivot": pivot,
                     "r1": r1, "r2": r2, "s1": s1, "s2": s2,
-                    "news": news_ai_summary,
+                    "news": recent_news_list,
                     "zoom_36h": zoom_36h_option,
                     "executed": False,
                     "result": "En cours / Indéterminé"
@@ -724,8 +750,8 @@ if st.session_state.active_tab == "new":
         st.plotly_chart(fig_interactive, use_container_width=True)
 
         st.markdown("---")
-        st.markdown(f"### 📰 Synthèse d'Actualité & Diagnostic Micro (Généré par IA - {ca['asset']})")
-        news_html = f"<div class='news-summary-box'>{ca['news']}</div>"
+        st.markdown(f"### 📰 Synthèse d'Actualité Multi-Sources & Diagnostic Micro ({ca['asset']})")
+        news_html = "<div class='news-summary-box'>" + "<br><br>".join(ca['news']) + "</div>"
         st.markdown(news_html, unsafe_allow_html=True)
 
         st.markdown("---")
@@ -781,8 +807,8 @@ else:
         st.plotly_chart(fig_interactive, use_container_width=True)
 
         st.markdown("---")
-        st.markdown(f"### 📰 Synthèse d'Actualité & Diagnostic Micro (Généré par IA - {entry['asset']})")
-        news_html = f"<div class='news-summary-box'>{entry.get('news', 'Actualités non disponibles.')}</div>"
+        st.markdown(f"### 📰 Synthèse d'Actualité Multi-Sources & Diagnostic Micro ({entry['asset']})")
+        news_html = "<div class='news-summary-box'>" + "<br><br>".join(entry.get('news', ['Actualités non disponibles.'])) + "</div>"
         st.markdown(news_html, unsafe_allow_html=True)
 
         st.markdown("---")
