@@ -66,6 +66,8 @@ if "active_tab" not in st.session_state:
     st.session_state.active_tab = "new"
 if "current_analysis" not in st.session_state:
     st.session_state.current_analysis = None
+if "chat_session_id" not in st.session_state:
+    st.session_state.chat_session_id = datetime.now().strftime("%Y%m%d%H%M%S%f")
 
 # ---------------------------------------------------------
 # CONFIGURATION KIE.AI & MOTEUR D'ANALYSE EXPERT & CHAT INTELLIGENT
@@ -452,6 +454,7 @@ if st.session_state.trade_history:
         if st.session_state.active_tab != "new":
             st.session_state.active_tab = "new"
             st.session_state.current_analysis = None
+            st.session_state.chat_session_id = datetime.now().strftime("%Y%m%d%H%M%S%f")
             st.rerun()
     else:
         selected_id = int(selected_history.split(" | ")[0])
@@ -466,6 +469,7 @@ if st.session_state.trade_history:
                 os.remove(HISTORY_FILE)
             st.session_state.active_tab = "new"
             st.session_state.current_analysis = None
+            st.session_state.chat_session_id = datetime.now().strftime("%Y%m%d%H%M%S%f")
             st.rerun()
 else:
     st.sidebar.info("Aucune archive.")
@@ -486,6 +490,8 @@ if st.session_state.active_tab == "new":
     run_analysis = st.button("🚀 Lancer l'Analyse Institutionnelle Experte", type="primary", use_container_width=True)
 
     if run_analysis:
+        # Réinitialisation de l'ID du chat pour garantir un historique propre et vide à chaque nouvelle recherche
+        st.session_state.chat_session_id = datetime.now().strftime("%Y%m%d%H%M%S%f")
         tf_info = TIMEFRAME_MAPPING[selected_timeframe]
         
         with st.spinner(f"Récupération fondamentale et analyse multi-timeframe pour {selected_asset_name}..."):
@@ -637,9 +643,10 @@ if st.session_state.active_tab == "new":
     if st.session_state.current_analysis is not None:
         ca = st.session_state.current_analysis
         
-        # Bouton Nouvelle Recherche ajouté en haut du rapport
+        # Bouton Nouvelle Recherche avec réinitialisation propre du chat
         if st.button("🔍 Nouvelle recherche", type="secondary", use_container_width=True):
             st.session_state.current_analysis = None
+            st.session_state.chat_session_id = datetime.now().strftime("%Y%m%d%H%M%S%f")
             st.rerun()
 
         st.markdown("---")
@@ -662,8 +669,8 @@ if st.session_state.active_tab == "new":
         st.markdown("### 📋 Synthèse et Plan Stratégique Expert")
         st.markdown(ca['report'])
 
-        # Chat permanent isolé pour l'analyse en cours
-        render_chat_interface("live_new_analysis", ca['asset'], ca['ticker'], ca['report'])
+        # Chat permanent isolé avec l'ID dynamique pour chaque nouvelle recherche
+        render_chat_interface(f"live_{st.session_state.chat_session_id}", ca['asset'], ca['ticker'], ca['report'])
 
         st.markdown("---")
         col_save1, col_save2 = st.columns([1, 2])
@@ -698,6 +705,7 @@ else:
         if st.button("⬅️ Effectuer une nouvelle analyse"):
             st.session_state.active_tab = "new"
             st.session_state.current_analysis = None
+            st.session_state.chat_session_id = datetime.now().strftime("%Y%m%d%H%M%S%f")
             st.rerun()
 
         st.markdown(f"## 📜 Archive : {entry['asset']} ({entry['tf']}) — {entry['timestamp']}")
@@ -745,4 +753,5 @@ else:
     else:
         st.session_state.active_tab = "new"
         st.session_state.current_analysis = None
+        st.session_state.chat_session_id = datetime.now().strftime("%Y%m%d%H%M%S%f")
         st.rerun()
