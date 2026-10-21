@@ -40,6 +40,14 @@ st.markdown("""
         border-radius: 8px;
         text-align: center;
     }
+    .news-summary-box {
+        background-color: #1a1d24;
+        border-left: 4px solid #26a69a;
+        padding: 12px;
+        border-radius: 4px;
+        margin-bottom: 15px;
+        font-size: 0.95em;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -76,7 +84,6 @@ KIE_API_KEY = "e1d8051846b1cdd140d743826770a614"
 KIE_ENDPOINT = "https://api.kie.ai/v1/chat/completions"
 
 def generate_ai_report(prompt_text, data_context=None):
-    # 1. Tentative d'appel via Kie.ai
     if KIE_API_KEY:
         for model_name in ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-1.5-flash"]:
             try:
@@ -103,15 +110,12 @@ def generate_ai_report(prompt_text, data_context=None):
             except Exception:
                 pass
 
-    # 2. Détection d'un nouveau prix fourni dans le chat pour un recalcul automatique fidèle au sens (LONG / SHORT)
     price_match = re.findall(r'(?:sur|à|de)\s+(\d{1,6}(?:\.\d+)?)', prompt_text.lower())
     custom_price = float(price_match[-1]) if price_match else None
 
     if custom_price:
-        # Détection automatique du sens initial (Short ou Long) à partir du contexte du rapport
         is_short = "SHORT" in prompt_text.upper() or "BAISSIÈR" in prompt_text.upper() or "BAISSIER" in prompt_text.upper()
-        
-        atr_est = custom_price * 0.008 # Estimation de la volatilité ATR (0.8%)
+        atr_est = custom_price * 0.008 
         
         if is_short:
             bias_text = "SHORT 🔴"
@@ -137,7 +141,6 @@ def generate_ai_report(prompt_text, data_context=None):
 - **Take Profit 2 (TP2) :** `{tp2_val:.2f}` (Objectif d'extension de marché)
 - **GESTION DU BREAK-EVEN (BE) :** Déplacer le Stop Loss au point d'entrée dès que le prix atteint `{be_val:.2f}`."""
 
-    # 3. Secours Algorithmique classique si rapport initial demandé
     if data_context:
         price = data_context.get("price", 0)
         pivot = data_context.get("pivot", 0)
@@ -201,7 +204,7 @@ def generate_ai_report(prompt_text, data_context=None):
 En tant qu'analyste institutionnel, j'ai bien pris en compte votre remarque sur le prix. Pour valider votre position par rapport au carnet d'ordres, surveillez l'absorption des flux et le respect des zones de valeur de l'AMT. Ajustez votre risque avec un Stop Loss technique basé sur l'ATR."""
 
 # ---------------------------------------------------------
-# Dictionnaire complet des actifs (100+ actifs)
+# Dictionnaire complet des actifs
 # ---------------------------------------------------------
 ASSETS_DICTIONARY = {
     "🇺🇸 Actions USA (Wall Street)": {
@@ -300,14 +303,14 @@ def get_recent_news(ticker_str):
         news = t.news
         headlines = []
         if news and isinstance(news, list):
-            for item in news[:3]:
+            for item in news[:4]:
                 title = item.get('title') or item.get('content', {}).get('title', '')
                 publisher = item.get('publisher') or item.get('content', {}).get('provider', {}).get('displayName', '')
                 if title:
-                    headlines.append(f"- {title} (Source: {publisher})")
-        return headlines if headlines else ["Aucune actualité récente majeure."]
+                    headlines.append(f"• **{title}** *(Source: {publisher})*")
+        return headlines if headlines else ["Aucune actualité récente majeure répertoriée."]
     except Exception:
-        return ["Actualités non disponibles."]
+        return ["Actualités non disponibles temporairement."]
 
 def get_fundamental_data(ticker_str):
     try:
@@ -580,6 +583,9 @@ if st.session_state.active_tab == "new":
                 Agis en tant qu'expert senior en marchés financiers, macroéconomie et trading institutionnel.
                 Réalise une analyse complète, rigoureuse et de niveau institutionnel pour l'actif **{selected_asset_name} ({ticker_symbol})** en unité de temps **{selected_timeframe}**.
 
+                ### ACTUALITÉS RÉCENTES DU MARCHÉ :
+                {news_text}
+
                 ### DONNÉES FONDAMENTALES & SECTORIELLES :
                 - Secteur : {fundamental_info.get('sector')}
                 - Industrie : {fundamental_info.get('industry')}
@@ -600,11 +606,8 @@ if st.session_state.active_tab == "new":
                 - Volatilité (ATR) : {atr_val:.2f}
                 - PIVOTS FIBONACCI : R2={r2:.2f}, R1={r1:.2f}, Pivot={pivot:.2f}, S1={s1:.2f}, S2={s2:.2f}
 
-                ### ACTUALITÉS ET CONTEXTE :
-                {news_text}
-
                 Structure ton rapport selon les exigences professionnelles suivantes :
-                1. **Analyse Fondamentale & Sectorielle** : Valorisation, santé financière, P/E, marges et positionnement macro de l'entreprise/actif.
+                1. **Analyse Fondamentale & Actualités Récentes** : Intègre l'impact des dernières actualités de marché, la valorisation et la santé financière.
                 2. **Biais Macroéconomique (Taux, Inflation, Emploi)** : Impact des politiques de banques centrales et chiffres macro.
                 3. **Auction Market Theory (AMT)** : Définition de la Value Area, acceptation/rejet des prix, et identification précise de la **zone de déséquilibre**.
                 4. **Analyse Technique Avancée** : Lecture croisée des MM (50/100/200), MACD, RSI, Bollinger et Pivots Fibonacci.
@@ -670,10 +673,11 @@ if st.session_state.active_tab == "new":
         fig_interactive = draw_interactive_chart(ca['df'], ca['pivot'], ca['r1'], ca['r2'], ca['s1'], ca['s2'], ca['asset'], ca['tf'], zoom_36h=ca['zoom_36h'])
         st.plotly_chart(fig_interactive, use_container_width=True)
 
+        # Ajout du bloc visuel pour le bref résumé de l'actualité récente
         st.markdown("---")
-        with st.expander("📰 Voir le flux d'actualités et filtre macro", expanded=False):
-            for headline in ca['news']:
-                st.write(headline)
+        st.markdown("### 📰 Bref Résumé de l'Actualité Récente")
+        news_html = "<div class='news-summary-box'>" + "<br>".join(ca['news']) + "</div>"
+        st.markdown(news_html, unsafe_allow_html=True)
 
         st.markdown("---")
         st.markdown("### 📋 Synthèse et Plan Stratégique Expert")
@@ -730,6 +734,11 @@ else:
 
         fig_interactive = draw_interactive_chart(entry['df'], entry['pivot'], entry['r1'], entry['r2'], entry['s1'], entry['s2'], entry['asset'], entry['tf'], zoom_36h=entry['zoom_36h'])
         st.plotly_chart(fig_interactive, use_container_width=True)
+
+        st.markdown("---")
+        st.markdown("### 📰 Bref Résumé de l'Actualité Récente")
+        news_html = "<div class='news-summary-box'>" + "<br>".join(entry.get('news', ['Actualités non disponibles.'])) + "</div>"
+        st.markdown(news_html, unsafe_allow_html=True)
 
         st.markdown("---")
         st.markdown("### 📊 Rapport d'Analyse")
