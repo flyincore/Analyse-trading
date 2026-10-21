@@ -2,6 +2,7 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
+import google.generativeai as genai
 import requests
 import json
 import os
@@ -43,7 +44,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("🎯 Bot d'Analyse Trading Pro — Suite Institutionnelle")
-st.markdown("Analyse technique & fondamentale, multi-timeframe incluant le **Scalping**, score de confluence, gestion du SL en Break-Even et journal de trading (Propulsé par Kie.ai).")
+st.markdown("Analyse technique & fondamentale, multi-timeframe incluant le **Scalping**, score de confluence, gestion du SL en Break-Even et journal de trading.")
 
 # ---------------------------------------------------------
 # GESTION DE LA PERSISTANCE DE L'HISTORIQUE (FICHIER LOCAL)
@@ -68,48 +69,68 @@ if "current_analysis" not in st.session_state:
     st.session_state.current_analysis = None
 
 # ---------------------------------------------------------
-# CONFIGURATION DE LA CLÉ KIE.AI
+# CONFIGURATION DES CLÉS (KIE.AI & GEMINI)
 # ---------------------------------------------------------
 KIE_API_KEY = "e1d8051846b1cdd140d743826770a614"
 KIE_ENDPOINT = "https://api.kie.ai/v1/chat/completions"
 
+GEMINI_API_KEYS = [
+    "AQ.Ab8RN6LER8j4XDy5SJbtfV6_cwWRIxnYYl9apPQ5Kf76YtyeiA",
+    "AQ.Ab8RN6J9IGu0uxxlZGo2s-GGGND7nvm0nGv1aRVlaLI5BQL5IA",
+    "AQ.Ab8RN6KRUrOJvrhpyETf5YPhr8VUvlSxyONYFAyUnlbfATTRsQ"
+]
+
 def generate_ai_report(prompt_text):
     error_details = []
     
-    # Test de plusieurs identifiants de modèles compatibles avec la passerelle Kie.ai
-    models_to_try = ["gemini-1.5-flash", "gemini-pro", "gemini-3.8-flash"]
-    
-    for model_name in models_to_try:
-        try:
-            headers = {
-                "Authorization": f"Bearer {KIE_API_KEY}",
-                "Content-Type": "application/json"
-            }
-            payload = {
-                "model": model_name,
-                "messages": [{"role": "user", "content": prompt_text}],
-                "temperature": 0.3
-            }
-            res = requests.post(KIE_ENDPOINT, headers=headers, json=payload, timeout=30)
-            if res.status_code == 200:
-                data = res.json()
-                if isinstance(data, dict):
-                    if "choices" in data and len(data["choices"]) > 0:
-                        content = data["choices"][0].get("message", {}).get("content", "")
-                        if content:
-                            return f"*(Rapport généré via Kie.ai - {model_name})*\n\n" + content
-                    for key in ["content", "response", "output", "text", "result"]:
-                        if key in data and data[key]:
-                            return f"*(Rapport généré via Kie.ai - {model_name})*\n\n" + str(data[key])
-            else:
-                error_details.append(f"Kie.ai [{model_name}] (HTTP {res.status_code}) : {res.text}")
-        except Exception as e:
-            error_details.append(f"Kie.ai [{model_name}] erreur : {str(e)}")
+    # 1. Tentative via Kie.ai
+    if KIE_API_KEY:
+        for model_name in ["gemini-1.5-flash", "gemini-pro", "gemini-3.8-flash"]:
+            try:
+                headers = {
+                    "Authorization": f"Bearer {KIE_API_KEY}",
+                    "Content-Type": "application/json"
+                }
+                payload = {
+                    "model": model_name,
+                    "messages": [{"role": "user", "content": prompt_text}],
+                    "temperature": 0.3
+                }
+                res = requests.post(KIE_ENDPOINT, headers=headers, json=payload, timeout=20)
+                if res.status_code == 200:
+                    data = res.json()
+                    if isinstance(data, dict):
+                        if "choices" in data and len(data["choices"]) > 0:
+                            content = data["choices"][0].get("message", {}).get("content", "")
+                            if content:
+                                return f"*(Rapport généré via Kie.ai - {model_name})*\n\n" + content
+                        for key in ["content", "response", "output", "text", "result"]:
+                            if key in data and data[key]:
+                                return f"*(Rapport généré via Kie.ai - {model_name})*\n\n" + str(data[key])
+                else:
+                    error_details.append(f"Kie.ai [{model_name}] (HTTP {res.status_code}) : {res.text}")
+            except Exception as e:
+                error_details.append(f"Kie.ai [{model_name}] exception : {str(e)}")
 
-    return "### ⚠️ Erreur de connexion à la passerelle Kie.ai :\n\n" + "\n".join(error_details)
+    # 2. Fallback automatique sur les clés Gemini directes (si configurées)
+    for api_key in GEMINI_API_KEYS:
+        try:
+            genai.configure(api_key=api_key)
+            for m_name in ['gemini-1.5-flash', 'gemini-pro']:
+                try:
+                    m = genai.GenerativeModel(m_name)
+                    response = m.generate_content(prompt_text)
+                    if response and response.text:
+                        return f"*(Rapport généré via Gemini direct - {m_name})*\n\n" + response.text
+                except Exception as ex:
+                    error_details.append(f"Gemini [{m_name}] : {str(ex)}")
+        except Exception:
+            pass
+
+    return "### ⚠️ Erreur critique de génération :\n\n" + "\n\n".join(error_details)
 
 # ---------------------------------------------------------
-# Dictionnaire complet et exhaustif (100+ actifs)
+# Dictionnaire des actifs et fonctions techniques
 # ---------------------------------------------------------
 ASSETS_DICTIONARY = {
     "🇺🇸 Actions USA (Wall Street)": {
@@ -218,7 +239,7 @@ def get_recent_news(ticker_str):
         return ["Actualités non disponibles."]
 
 # ---------------------------------------------------------
-# Graphique interactif Plotly avec bougies pleines & flèches
+# Graphique interactif Plotly
 # ---------------------------------------------------------
 def draw_interactive_chart(df, pivot, r1, r2, s1, s2, asset_name, timeframe, zoom_36h=False):
     df_plot = df.copy()
@@ -426,7 +447,7 @@ if st.session_state.active_tab == "new":
 
                 prompt = f"""
                 Tu es un comité d'investissement et un algorithme de trading institutionnel expert.
-                Analyse l'actif **{selected_asset_name} ({ticker_symbol})** en unité de temps **{selected_timeframe}** (Configuration spécifique Scalping / Intraday court si sélectionné).
+                Analyse l'actif **{selected_asset_name} ({ticker_symbol})** en unité de temps **{selected_timeframe}**.
 
                 ### DONNÉES TECHNIQUES & QUANTITATIVES :
                 - Prix actuel : {current_price:.2f}
@@ -464,7 +485,7 @@ if st.session_state.active_tab == "new":
                 - **GESTION DU BREAK-EVEN (BE) :** Précise explicitement à quel niveau exact de prix (ou après quel objectif atteint / nombre de pips gagnés) il convient de déplacer le Stop Loss au point d'entrée (Break-Even) pour sécuriser la position sans risque.
                 """
 
-                with st.spinner("Génération du rapport institutionnel via Kie.ai..."):
+                with st.spinner("Génération du rapport institutionnel..."):
                     ai_text = generate_ai_report(prompt)
 
                 timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M")
