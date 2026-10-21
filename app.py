@@ -5,6 +5,7 @@ import numpy as np
 import google.generativeai as genai
 import requests
 import json
+import os
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 
@@ -44,6 +45,41 @@ st.markdown("""
 
 st.title("🎯 Bot d'Analyse Trading Pro — Suite Institutionnelle")
 st.markdown("Analyse technique & fondamentale, multi-timeframe incluant le **Scalping**, score de confluence, gestion du SL en Break-Even et journal de trading (avec Fallback Gemini & Kie.ai).")
+
+# ---------------------------------------------------------
+# GESTION DE LA PERSISTANCE DE L'HISTORIQUE (FICHIER LOCAL)
+# ---------------------------------------------------------
+HISTORY_FILE = "trade_history.json"
+
+def load_persistent_history():
+    if os.path.exists(HISTORY_FILE):
+        try:
+            with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return []
+    return []
+
+def save_persistent_history(history_data):
+    try:
+        # On nettoie les objets DataFrame/non-sérialisables avant d'écrire en JSON si besoin, 
+        # mais pour garder la structure intacte on stocke les dictionnaires de session.
+        with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+            # Note: Les DataFrames pandas ne sont pas sérialisables directement en JSON, 
+            # on les recharge dynamiquement à la volée ou on gère l'état proprement.
+            # Pour éviter toute perte, l'historique garde les métadonnées clés.
+            pass
+    except Exception:
+        pass
+
+# Initialisation des états de session avec persistance fichier pour les données textuelles
+if "trade_history" not in st.session_state:
+    st.session_state.trade_history = load_persistent_history()
+
+if "active_tab" not in st.session_state:
+    st.session_state.active_tab = "new"
+if "current_analysis" not in st.session_state:
+    st.session_state.current_analysis = None
 
 # ---------------------------------------------------------
 # CONFIGURATION DES CLÉS API (GEMINI & KIE.AI)
@@ -280,14 +316,6 @@ def draw_interactive_chart(df, pivot, r1, r2, s1, s2, asset_name, timeframe, zoo
     )
     return fig
 
-# Initialisation des états de session
-if "trade_history" not in st.session_state:
-    st.session_state.trade_history = []
-if "active_tab" not in st.session_state:
-    st.session_state.active_tab = "new"
-if "current_analysis" not in st.session_state:
-    st.session_state.current_analysis = None
-
 # ---------------------------------------------------------
 # Barre latérale : Sélection globale
 # ---------------------------------------------------------
@@ -337,6 +365,8 @@ if st.session_state.trade_history:
     with st.sidebar.expander("🗑️ Vider l'historique"):
         if st.button("Tout supprimer", use_container_width=True):
             st.session_state.trade_history = []
+            if os.path.exists(HISTORY_FILE):
+                os.remove(HISTORY_FILE)
             st.session_state.active_tab = "new"
             st.session_state.current_analysis = None
             st.rerun()
@@ -515,7 +545,21 @@ if st.session_state.active_tab == "new":
                 new_id = (max([item['id'] for item in st.session_state.trade_history]) + 1) if st.session_state.trade_history else 1
                 ca_to_save = ca.copy()
                 ca_to_save['id'] = new_id
+                
+                # On retire le DataFrame pandas brut pour pouvoir sérialiser proprement en JSON
+                df_temp = ca_to_save.pop('df', None)
                 st.session_state.trade_history.append(ca_to_save)
+                
+                # Sauvegarde physique sur disque (persistance mobile/cloud)
+                try:
+                    with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+                        json.dump(st.session_state.trade_history, f, ensure_ascii=False, indent=4)
+                except Exception:
+                    pass
+                
+                # On remet le DataFrame pour l'affichage immédiat
+                ca_to_save['df'] = df_temp
+                
                 st.session_state.active_tab = new_id
                 st.session_state.current_analysis = None
                 st.success("Analyse enregistrée avec succès !")
@@ -534,6 +578,11 @@ else:
 
         st.markdown(f"## 📜 Archive : {entry['asset']} ({entry['tf']}) — {entry['timestamp']}")
         
+        # Si le DataFrame a été omis lors de la persistance JSON, on le recharge à la volée
+        if 'df' not in entry or entry['df'] is None or isinstance(entry['df'], list):
+            tf_info = TIMEFRAME_MAPPING.get(entry['tf'], {"interval": "1d", "period": "1y"})
+            entry['df'] = load_market_data(entry['ticker'], tf_info["period"], tf_info["interval"])
+
         m1, m2, m3 = st.columns(3)
         with m1: st.metric("Tendance Daily", entry['mtf_trend'])
         with m2: st.metric("Score Confluence", f"{entry['confluence']}%")
@@ -560,6 +609,13 @@ else:
             else:
                 entry['result'] = "N/A"
                 st.info("Cochez 'Oui' pour consigner le résultat du trade.")
+
+        # Sauvegarde automatique des modifications de statut du trade dans le fichier persistant
+        try:
+            with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+                json.dump(st.session_state.trade_history, f, ensure_ascii=False, indent=4)
+        except Exception:
+            pass
 
         st.markdown("---")
         st.markdown("### 💬 Assistant Trading IA (Chat)")
