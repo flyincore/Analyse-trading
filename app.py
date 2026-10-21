@@ -43,10 +43,11 @@ st.markdown("""
     .news-summary-box {
         background-color: #1a1d24;
         border-left: 4px solid #26a69a;
-        padding: 12px;
+        padding: 15px;
         border-radius: 4px;
         margin-bottom: 15px;
         font-size: 0.95em;
+        line-height: 1.6;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -303,7 +304,7 @@ def get_recent_news(ticker_str, asset_name=""):
         news = t.news
         headlines = []
         if news and isinstance(news, list):
-            for item in news[:4]:
+            for item in news[:3]:
                 title = item.get('title') or item.get('content', {}).get('title', '')
                 publisher = item.get('publisher') or item.get('content', {}).get('provider', {}).get('displayName', '')
                 if title:
@@ -313,39 +314,37 @@ def get_recent_news(ticker_str, asset_name=""):
     except Exception:
         pass
     
-    # Résumé contextuel de secours complet et entièrement en français selon la classe d'actif
+    # Résumé contextuel de secours complet, détaillé et rédigé de manière réfléchie (en français)
     lower_name = asset_name.lower()
     if "pétrole" in lower_name or "brent" in lower_name or "wti" in lower_name or "BZ=F" in ticker_str or "CL=F" in ticker_str:
         return [
-            "• **Perspectives de production de l'OPEP+ et ajustements des quotas d'offre mondiale** *(Source : Marchés Énergétiques Globaux)*",
-            "• **Prise en compte de la prime de risque géopolitique et des routes d'approvisionnement (Moyen-Orient)** *(Source : Analyse Macro Énergie)*",
-            "• **Dynamique des stocks de brut américains et rapports hebdomadaires de l'EIA** *(Source : Energy Information Administration)*",
-            "• **Impact de la transition énergétique et de la demande industrielle sur les contrats à terme** *(Source : Veille Stratégique Pétrole)*"
+            "• **Équilibre Offre / Demande & OPEP+ :** Les marchés de l'énergie évoluent actuellement sous le double regard de la discipline des quotas de l'OPEP+ et des signaux contrastés de la demande industrielle mondiale (notamment en provenance de la Chine et des États-Unis).",
+            "• **Primes de Risque Géopolitique :** Les tensions persistantes dans les couloirs logistiques du Moyen-Orient et les risques d'interruption d'approvisionnement insufflent une volatilité structurelle, maintenant une prime de risque active sur les contrats à terme.",
+            "• **Rapports des Stocks & EIA :** La publication hebdomadaire des stocks de brut américains (API et EIA) continue de servir de catalyseur immédiat pour tester les zones d'acceptation et de rejet de prix au sein de l'Auction Market Theory (AMT)."
         ]
     elif "or" in lower_name or "gold" in lower_name or "argent" in lower_name or "GC=F" in ticker_str or "SI=F" in ticker_str:
         return [
-            "• **Orientation de la politique monétaire des banques centrales et anticipations de taux directeurs** *(Source : Macro Métaux Précieux)*",
-            "• **Flux de capitaux vers les actifs refuges face aux tensions géopolitiques mondiales** *(Source : Veille Marchés Mondiaux)*",
-            "• **Corrélation inverse avec l'indice du dollar (DXY) et évolution des rendements réels obligataires** *(Source : Analyse Financière Institutionnelle)*",
-            "• **Achats massifs de lingots par les banques centrales et soutien structurel à long terme** *(Source : World Gold Council Monitor)*"
+            "• **Politique Monétaire et Rendements Réels :** Le métal jaune réagit avec une grande sensibilité aux anticipations de pivot des taux directeurs de la Réserve Federale (Fed) et à la trajectoire des rendements obligataires réels à 10 ans.",
+            "• **Achats Souverains et Actif Refuge :** Les banques centrales mondiales maintiennent un rythme d'accumulation solide de leurs réserves d'or, offrant un soutien fondamental inébranlable face aux incertitudes géopolitiques et budgétaires macroéconomiques.",
+            "• **Dynamique du Dollar (DXY) :** La corrélation inverse avec l'indice du dollar reste le baromètre privilégié des fonds spéculatifs pour valider ou rejeter les tentatives de cassure des résistances institutionnelles."
         ]
     elif "bitcoin" in lower_name or "ethereum" in lower_name or "crypto" in lower_name or "-USD" in ticker_str:
         return [
-            "• **Flux institutionnels entrants via les ETF spot et évolution de la liquidité globale** *(Source : Recherche Actifs Numériques)*",
-            "• **Développements réglementaires internationaux et adoption par les gestionnaires d'actifs** *(Source : Crypto Market Wire)*",
-            "• **Évolution du sentiment de marché (Risk-On / Risk-Off) et corrélation avec les marchés actions tech** *(Source : Veille Crypto Institutionnelle)*"
+            "• **Flux Institutionnels et Liquidité :** L'écosystème numérique est fortement tributaire des entrées de capitaux nets enregistrées par les fonds indiciels (ETF spot) ainsi que de la liquidité globale injectée par les banques centrales.",
+            "• **Maturation Réglementaire :** Les évolutions législatives en cours redessinent en profondeur la structure des carnets d'ordres, favorisant une institutionalisation progressive et réduisant l'impact de la volatilité purement spéculative de détail.",
+            "• **Sentiment de Marché (Risk-On) :** Le comportement des cryptomonnaies demeure intimement lié à l'appétit pour le risque global, dicté par la dynamique des marchés actions technologiques américains."
         ]
     elif "s&p" in lower_name or "nasdaq" in lower_name or "cac" in lower_name or "dax" in lower_name or "^" in ticker_str:
         return [
-            "• **Résultats macroéconomiques US/Europe (Inflation CPI, chiffres de l'emploi NFP, PIB)** *(Source : Indicateurs Macroéconomiques)*",
-            "• **Saisonnalité des publications de résultats d'entreprises et marges opérationnelles des grandes capitalisations** *(Source : Wall Street & Euronext Desk)*",
-            "• **Arbitrages sectoriels des institutionnels entre valeurs de croissance et valeurs défensives** *(Source : Stratégie de Marché Globale)*"
+            "• **Indicateurs d'Inflation et Emploi :** Les publications macroéconomiques majeures (indices CPI/PCE et rapports NFP sur l'emploi) conditionnent les anticipations de atterrissage en douceur de l'économie, dictant les arbitrages des institutionnels.",
+            "• **Saisonnalité des Résultats :** L'analyse des marges opérationnelles et des prévisions de croissance des grandes capitalisations oriente la rotation sectorielle entre valeurs de croissance et valeurs défensives.",
+            "• **Structure des Marchés :** Les concentrations d'options et les flux de couverture institutionnels encadrent la volatilité technique à proximité des zones de liquidité majeure."
         ]
     else:
         return [
-            f"• **Analyse conjoncturelle et positionnement stratégique institutionnel pour {asset_name or ticker_str}** *(Source : Flux Global)*",
-            "• **Surveillance active des volumes d'échange et de la structure de liquidité du carnet d'ordres** *(Source : Market Watch Desk)*",
-            "• **Évaluation des risques macroéconomiques globaux et de l'appétit pour le risque des investisseurs** *(Source : Note de Synthèse Pro)*"
+            f"• **Analyse Conjoncturelle de l'Actif :** L'actif **{asset_name or ticker_str}** fait l'objet d'une surveillance institutionnelle étroite, dans un climat macroéconomique global marqué par la recherche de rendement et la gestion active du risque de portefeuille.",
+            "• **Lecture des Flux (Order Flow) :** La structure des volumes d'échange met en lumière une phase de redéfinition des zones de juste valeur, nécessitant une lecture rigoureuse de l'acceptation ou du rejet des prix par les opérateurs majeurs.",
+            "• **Alignement Stratégique :** La synthèse des indicateurs techniques et fondamentaux permet d'ajuster le biais opérationnel en fonction des arbitrages en cours sur les marchés mondiaux."
         ]
 
 def get_fundamental_data(ticker_str):
@@ -619,7 +618,7 @@ if st.session_state.active_tab == "new":
                 Agis en tant qu'expert senior en marchés financiers, macroéconomie et trading institutionnel.
                 Réalise une analyse complète, rigoureuse et de niveau institutionnel pour l'actif **{selected_asset_name} ({ticker_symbol})** en unité de temps **{selected_timeframe}**.
 
-                ### ACTUALITÉS RÉCENTES DU MARCHÉ :
+                ### ACTUALITÉS RÉCENTES ET CONTEXTE MACRO :
                 {news_text}
 
                 ### DONNÉES FONDAMENTALES & SECTORIELLES :
@@ -710,8 +709,8 @@ if st.session_state.active_tab == "new":
         st.plotly_chart(fig_interactive, use_container_width=True)
 
         st.markdown("---")
-        st.markdown("### 📰 Bref Résumé de l'Actualité Récente")
-        news_html = "<div class='news-summary-box'>" + "<br>".join(ca['news']) + "</div>"
+        st.markdown("### 📰 Synthèse Réfléchie de l'Actualité & Contexte Macro")
+        news_html = "<div class='news-summary-box'>" + "<br><br>".join(ca['news']) + "</div>"
         st.markdown(news_html, unsafe_allow_html=True)
 
         st.markdown("---")
@@ -771,8 +770,8 @@ else:
         st.plotly_chart(fig_interactive, use_container_width=True)
 
         st.markdown("---")
-        st.markdown("### 📰 Bref Résumé de l'Actualité Récente")
-        news_html = "<div class='news-summary-box'>" + "<br>".join(entry.get('news', ['Actualités non disponibles.'])) + "</div>"
+        st.markdown("### 📰 Synthèse Réfléchie de l'Actualité & Contexte Macro")
+        news_html = "<div class='news-summary-box'>" + "<br><br>".join(entry.get('news', ['Actualités non disponibles.'])) + "</div>"
         st.markdown(news_html, unsafe_allow_html=True)
 
         st.markdown("---")
