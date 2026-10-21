@@ -185,7 +185,6 @@ KIE_ENDPOINT = "https://api.kie.ai/v1/chat/completions"
 
 def generate_ai_report(prompt_text, data_context=None):
     if KIE_API_KEY:
-        # Restriction exclusive sur Gemini 3.8 Flash et Gemini 3.7 Flash
         for model_name in ["gemini-3.8-flash", "gemini-3.7-flash"]:
             try:
                 headers = {
@@ -370,7 +369,7 @@ ASSETS_DICTIONARY = {
         "Shiba Inu (SHIB/USD)": "SHIB-USD", "Litecoin (LTC/USD)": "LTC-USD", "Uniswap (UNI/USD)": "UNI-USD",
         "Cosmos (ATOM/USD)": "ATOM-USD", "Monero (XMR/USD)": "XMR-USD", "Stellar (XLM/USD)": "XLM-USD",
         "Near Protocol (NEAR/USD)": "NEAR-USD", "Render (RENDER/USD)": "RENDER-USD", "Sui (SUI/USD)": "SUI-USD",
-        "Aptos (APT/USD)": "APT-USD", "Arbitrum (ARB/USD)": "ARB-USD", "Pepe (PEPE/USD)": "PEPE-USD", "Toncoin (TON/USD)": "TON-USD"
+        "Aptos (APT/USD)": "APT-USD", "Arbitrum (ARB/USD)": "Arbitrum-USD", "Pepe (PEPE/USD)": "PEPE-USD", "Toncoin (TON/USD)": "TON-USD"
     }
 }
 
@@ -399,18 +398,18 @@ def load_daily_pivots_data(ticker_str):
     return df_d
 
 # ---------------------------------------------------------
-# RÉSUMÉ D'ACTUALITÉ & DIAGNOSTIC MICRO-ÉCONOMIQUE APPROFONDI (GEMINI 3.8 / 3.7 FLASH)
+# RÉSUMÉ D'ACTUALITÉ & DIAGNOSTIC MICRO-ÉCONOMIQUE APPROFONDI (ACTIF-SPÉCIFIQUE)
 # ---------------------------------------------------------
 def get_recent_news(ticker_str, clean_asset_name="", fundamental_info=None):
     raw_articles = []
     
-    # 1. Google News RSS Multi-Sources (Investing, Boursorama, Bloomberg, Les Echos...)
+    # 1. Récupération Google News RSS ciblée sur l'actif exact
     try:
-        query = clean_asset_name.replace(" ", "+")
-        rss_url = f"https://news.google.com/rss/search?q={query}+bourse+trading&hl=fr&gl=FR&ceid=FR:fr"
+        query = f"{clean_asset_name} {ticker_str}".replace(" ", "+")
+        rss_url = f"https://news.google.com/rss/search?q={query}+bourse+trading+actualite&hl=fr&gl=FR&ceid=FR:fr"
         feed = feedparser.parse(rss_url)
         if feed.entries:
-            for entry in feed.entries[:4]:
+            for entry in feed.entries[:5]:
                 source = entry.get('source', {}).get('title', 'Presse Financière')
                 title = entry.get('title', '')
                 if title:
@@ -418,12 +417,12 @@ def get_recent_news(ticker_str, clean_asset_name="", fundamental_info=None):
     except Exception:
         pass
 
-    # 2. Yahoo Finance Direct
+    # 2. Récupération Yahoo Finance Direct
     try:
         t = yf.Ticker(ticker_str)
         news = t.news
         if news and isinstance(news, list):
-            for item in news[:3]:
+            for item in news[:4]:
                 title = item.get('title') or item.get('content', {}).get('title', '')
                 publisher = item.get('publisher') or item.get('content', {}).get('provider', {}).get('displayName', '')
                 if title:
@@ -431,28 +430,30 @@ def get_recent_news(ticker_str, clean_asset_name="", fundamental_info=None):
     except Exception:
         pass
 
-    raw_news_str = "\n".join(raw_articles) if raw_articles else "Aucune dépêche directe immédiate trouvée."
+    raw_news_str = "\n".join(raw_articles) if raw_articles else "Aucune dépêche externe immédiate, analyse basée sur les fondamentaux actuels de l'actif."
     fund = fundamental_info if fundamental_info else {}
 
+    # Consigne stricte pour forcer une génération dynamique, unique et non générique
     micro_prompt = f"""
-    En tant qu'analyste senior spécialisé en stratégie d'entreprise et micro-économie financière institutionnelle, rédige un diagnostic micro-économique extrêmement approfondi et professionnel pour l'actif **{clean_asset_name}** ({ticker_symbol}).
+    En tant qu'analyste financier senior et stratégiste de marché, rédige un diagnostic micro-économique de niveau institutionnel EXCLUSIVEMENT centré sur l'actif **{clean_asset_name}** (Ticker: {ticker_str}).
 
-    ### DÉPÊCHES RECENTES ET DÉTECTÉES EN DIRECT :
+    ### DERNIÈRES ACTUALITÉS ET FLUX CAPTURÉS POUR CET ACTIF :
     {raw_news_str}
 
-    ### ÉLÉMENTS FONDAMENTAUX DISPONIBLES :
+    ### DONNÉES FONDAMENTALES RÉELLES DE L'ACTIF :
+    - Nom officiel : {clean_asset_name}
     - Secteur : {fund.get('sector', 'N/A')}
     - Industrie : {fund.get('industry', 'N/A')}
     - Capitalisation Boursière : {fund.get('marketCap', 'N/A')}
-    - P/E Ratio (Valorisation) : {fund.get('peRatio', 'N/A')}
-    - Marge bénéficiaire : {fund.get('profitMargins', 'N/A')}
-    - Rendement Dividende : {fund.get('dividendYield', 'N/A')}
+    - P/E Ratio : {fund.get('peRatio', 'N/A')}
+    - Marges / Rentabilité : {fund.get('profitMargins', 'N/A')}
+    - Résumé d'activité : {fund.get('description', 'N/A')[:400]}
 
-    CONSIGNES STRICTES DE RÉDACTION :
-    - Adopte un ton d'analyste sell-side / buy-side institutionnel (très qualitatif, concis mais dense et technique).
-    - Rédige exactement 4 points stratégiques structurés sous forme de puces markdown avec titres en gras.
-    - Évite la généralité : aborde la dynamique des marges, le pricing power, la structure des coûts (opératoires / d'extraction / financiers), les catalyseurs de court/moyen terme et la situation concurrentielle spécifique à **{clean_asset_name}**.
-    - Ne fais JAMAIS référence à un code ISIN ou un ticker brut dans les descriptions, utilise uniquement le nom exact : **{clean_asset_name}**.
+    INSTRUCTIONS IMPÉRATIVES :
+    1. Ne rédige PAS de texte passe-partout ou générique. Chaque point doit mentionner directement des éléments propres à **{clean_asset_name}** (son secteur d'activité, sa structure financière, l'impact des actualités ci-dessus).
+    2. Structure ta réponse exactement en 4 points détaillés sous forme de puces markdown avec des titres en gras percutants.
+    3. Aborde spécifiquement : la santé opérationnelle, l'impact des flux récents sur son carnet d'ordres ou sa valorisation, sa politique de distribution / marges, et ses catalyseurs de marché à court terme.
+    4. N'utilise jamais de codes ISIN ou de tickers bruts dans le texte, uniquement le nom propre de l'actif : **{clean_asset_name}**.
     """
 
     try:
@@ -461,15 +462,14 @@ def get_recent_news(ticker_str, clean_asset_name="", fundamental_info=None):
                 "Authorization": f"Bearer {KIE_API_KEY}",
                 "Content-Type": "application/json"
             }
-            # Utilisation prioritaire de Gemini 3.8 Flash et Gemini 3.7 Flash
             for micro_model in ["gemini-3.8-flash", "gemini-3.7-flash"]:
                 try:
                     payload = {
                         "model": micro_model,
                         "messages": [{"role": "user", "content": micro_prompt}],
-                        "temperature": 0.2
+                        "temperature": 0.35  # Légèrement augmenté pour éviter les réponses robotiques identiques
                     }
-                    res = requests.post(KIE_ENDPOINT, headers=headers, json=payload, timeout=15)
+                    res = requests.post(KIE_ENDPOINT, headers=headers, json=payload, timeout=20)
                     if res.status_code == 200:
                         data = res.json()
                         content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
@@ -484,11 +484,12 @@ def get_recent_news(ticker_str, clean_asset_name="", fundamental_info=None):
     except Exception:
         pass
 
+    # Repli qualitatif dynamique unique
     return [
-        f"• **Dynamique des Marges & Pricing Power ({clean_asset_name}) :** Évaluation de la capacité de l'actif à répercuter l'inflation des coûts sur ses prix de vente sans dégrader son carnet de commandes ni sa part de marché relative.",
-        f"• **Structure des Coûts Opérationnels & Levier Financier :** Analyse du besoin en fonds de roulement (BFR), du refinancement des dettes et de la maîtrise du Cash Cost opératoire face au contexte économique actuel.",
-        f"• **Catalyseurs Micro-économiques & Visibilité du Cash-Flow :** Analyse des prochains rendez-vous financiers et des perspectives d'EBITDA/Free Cash Flow récurrent pour soutenir la valorisation globale.",
-        f"• **Positionnement Concurrentiel & Risques Spécifiques ({clean_asset_name}) :** Veille sur la structure de l'offre, la pression réglementaire et la résilience du modèle d'affaires face aux acteurs majeurs du secteur."
+        f"• **Analyse Conjoncturelle & Flux de Marché ({clean_asset_name}) :** Examen des volumes d'échange récents et de la réaction du carnet d'ordres face aux dernières publications sectorielles de l'actif.",
+        f"• **Structure Financière & Marges Opérationnelles :** Évaluation de la robustesse des flux de trésorerie disponibles (Free Cash Flow) et de l'efficacité de la gestion des coûts pour {clean_asset_name}.",
+        f"• **Catalyseurs & Perspectives à Court Terme :** Anticipation des prochains jalons macro et micro-économiques susceptibles d'inféchir la trajectoire des cours de {clean_asset_name}.",
+        f"• **Appréciation du Risque & Positionnement Institutionnel :** Synthèse de l'exposition au risque sectoriel et lecture des anticipations des investisseurs institutionnels sur {clean_asset_name}."
     ]
 
 def get_fundamental_data(ticker_str):
