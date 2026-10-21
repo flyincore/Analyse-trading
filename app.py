@@ -86,7 +86,7 @@ def load_persistent_history():
                         "mtf_trend": str(r["mtf_trend"]),
                         "confluence": int(r["confluence"]),
                         "report": str(r["report"]),
-                        "news": json.loads(r["news"]) if r.get("news") else [],
+                        "news": str(r.get("news", "")),
                         "zoom_36h": bool(r.get("zoom_36h", True)),
                         "executed": bool(r.get("executed", False)),
                         "result": str(r.get("result", "En cours / Indéterminé")),
@@ -122,7 +122,7 @@ def save_history_entry(entry):
                 "mtf_trend": entry["mtf_trend"],
                 "confluence": entry["confluence"],
                 "report": entry["report"],
-                "news": json.dumps(entry.get("news", []), ensure_ascii=False),
+                "news": str(entry.get("news", "")),
                 "zoom_36h": entry.get("zoom_36h", True),
                 "executed": entry.get("executed", False),
                 "result": entry.get("result", "En cours / Indéterminé"),
@@ -194,114 +194,24 @@ def generate_ai_report(prompt_text, data_context=None):
                 payload = {
                     "model": model_name,
                     "messages": [{"role": "user", "content": prompt_text}],
-                    "temperature": 0.2
+                    "temperature": 0.4
                 }
-                res = requests.post(KIE_ENDPOINT, headers=headers, json=payload, timeout=20)
+                res = requests.post(KIE_ENDPOINT, headers=headers, json=payload, timeout=25)
                 if res.status_code == 200:
                     data = res.json()
                     if isinstance(data, dict):
                         if "choices" in data and len(data["choices"]) > 0:
                             content = data["choices"][0].get("message", {}).get("content", "")
                             if content:
-                                return f"*(Rapport / Réponse généré via Kie.ai - {model_name})*\n\n" + content
+                                return f"*(Réponse générée via Kie.ai - {model_name})*\n\n" + content
                         for key in ["content", "response", "output", "text", "result"]:
                             if key in data and data[key]:
-                                return f"*(Rapport / Réponse généré via Kie.ai - {model_name})*\n\n" + str(data[key])
+                                return f"*(Réponse générée via Kie.ai - {model_name})*\n\n" + str(data[key])
             except Exception:
                 pass
 
-    price_match = re.findall(r'(?:sur|à|de)\s+(\d{1,6}(?:\.\d+)?)', prompt_text.lower())
-    custom_price = float(price_match[-1]) if price_match else None
-
-    if custom_price:
-        is_short = "SHORT" in prompt_text.upper() or "BAISSIÈR" in prompt_text.upper() or "BAISSIER" in prompt_text.upper()
-        atr_est = custom_price * 0.008 
-        
-        if is_short:
-            bias_text = "SHORT 🔴"
-            sl_val = custom_price + (1.5 * atr_est)
-            be_val = custom_price - (1.0 * atr_est)
-            tp1_val = custom_price - (1.5 * atr_est)
-            tp2_val = custom_price - (3.0 * atr_est)
-        else:
-            bias_text = "LONG 🟢"
-            sl_val = custom_price - (1.5 * atr_est)
-            be_val = custom_price + (1.0 * atr_est)
-            tp1_val = custom_price + (1.5 * atr_est)
-            tp2_val = custom_price + (3.0 * atr_est)
-
-        return f"""*(Recalcul Automatique du Plan — Basé sur le prix XTB : {custom_price:.2f})*
-
-### 🎯 PLAN DE TRADE RECALCULÉ (EXPERT)
-- **Nouveau Prix de Référence :** `{custom_price:.2f}`
-- **Biais Opérationnel :** **{bias_text}** (Préservé et aligné sur l'analyse initiale)
-- **Point d'Entrée Optimal :** `{custom_price:.2f}` (Sur test de la zone de déséquilibre)
-- **Stop Loss (SL) Institutionnel :** `{sl_val:.2f}` (Calculé avec un risque de 1.5x ATR estimé à `{atr_est:.2f}`)
-- **Take Profit 1 (TP1) :** `{tp1_val:.2f}` (Allègement de 50% de la position)
-- **Take Profit 2 (TP2) :** `{tp2_val:.2f}` (Objectif d'extension de marché)
-- **GESTION DU BREAK-EVEN (BE) :** Déplacer le Stop Loss au point d'entrée dès que le prix atteint `{be_val:.2f}`."""
-
-    if data_context:
-        price = data_context.get("price", 0)
-        pivot = data_context.get("pivot", 0)
-        r1 = data_context.get("r1", 0)
-        r2 = data_context.get("r2", 0)
-        s1 = data_context.get("s1", 0)
-        s2 = data_context.get("s2", 0)
-        trend = data_context.get("mtf_trend", "Neutre")
-        rsi = data_context.get("rsi", 50)
-        atr = data_context.get("atr", price * 0.01)
-        macd = data_context.get("macd", 0)
-        macd_signal = data_context.get("macd_signal", 0)
-        mm50 = data_context.get("mm50", price)
-        mm100 = data_context.get("mm100", price)
-        mm200 = data_context.get("mm200", price)
-        boll_up = data_context.get("boll_up", price * 1.02)
-        boll_low = data_context.get("boll_low", price * 0.98)
-        fund = data_context.get("fundamentals", {})
-
-        bias = "LONG 🟢" if "Haussièr" in trend else "SHORT 🔴"
-        sl_val = price - (1.5 * atr) if "LONG" in bias else price + (1.5 * atr)
-        be_val = price + (1.0 * atr) if "LONG" in bias else price - (1.0 * atr)
-        tp1_val = r1 if "LONG" in bias else s1
-        tp2_val = r2 if "LONG" in bias else s2
-        entry_opt = price - (0.2 * atr) if "LONG" in bias else price + (0.2 * atr)
-
-        return f"""*(Rapport d'Expertise Institutionnelle — Mode de Secours Algorithmique)*
-
-### 1. 📈 ANALYSE FONDAMENTALE DE L'ACTIF
-- **Secteur / Industrie :** {fund.get('sector', 'N/A')} ({fund.get('industry', 'N/A')})
-- **Capitalisation & Valorisation :** Cap. Boursière : {fund.get('marketCap', 'N/A')} | P/E Ratio : {fund.get('peRatio', 'N/A')}
-
----
-
-### 2. 🌍 BIAIS MACROÉCONOMIQUE (Taux, Inflation & Emploi)
-- **Politique Monétaire :** Les anticipations de taux des banques centrales guident l'allocation des flux de capitaux sur cet actif.
-- **Inflation & Emploi :** Le climat macroéconomique global soutient la structure de volatilité mesurée par l'ATR (`{atr:.2f}`).
-
----
-
-### 3. 🏛️ ANALYSE STRUCTURELLE (Auction Market Theory - AMT)
-- **Zone de Déséquilibre :** Le marché évalue l'acceptation des prix autour du pivot central (`{pivot:.2f}`).
-
----
-
-### 4. 📊 ANALYSE TECHNIQUE MULTI-INDICATEURS
-- **Moyennes Mobiles :** MM50 (`{mm50:.2f}`) | MM100 (`{mm100:.2f}`) | MM200 (`{mm200:.2f}`).
-- **RSI (14) :** `{rsi:.2f}` | **MACD :** `{macd:.4f}` (Signal: `{macd_sig_val:.4f}`).
-- **Bandes de Bollinger :** Sup=`{boll_up:.2f}` | Inf=`{boll_low:.2f}`.
-- **Pivots Fibonacci :** R2=`{r2:.2f}`, R1=`{r1:.2f}`, Pivot=`{pivot:.2f}`, S1=`{s1:.2f}`, S2=`{s2:.2f}`.
-
----
-
-### 5. 🎯 PLAN DE TRADE & EXÉCUTION PAR ORDER FLOW
-- **Biais Opérationnel :** **{bias}**
-- **Point d'Entrée Chirurgical :** `{entry_opt:.2f}` sur confirmation d'absorption des flux.
-- **Stop Loss (SL) :** `{sl_val:.2f}` | **TP1 :** `{tp1_val:.2f}` | **TP2 :** `{tp2_val:.2f}`
-- **BREAK-EVEN (BE) :** Déplacer le SL au point d'entrée dès que le prix atteint `{be_val:.2f}`."""
-
-    return f"""*(Assistant Trading IA - Mode Expert)*
-En tant qu'analyste institutionnel, j'ai bien pris en compte votre remarque sur le prix. Pour valider votre position par rapport au carnet d'ordres, surveillez l'absorption des flux et le respect des zones de valeur de l'ATR."""
+    return f"""*(Assistant Trading IA - Mode Conversationnel Libre)*
+J'ai bien pris en compte votre message. Analysons ensemble les aspects fondamentaux, stratégiques ou techniques de cet actif. Que souhaitez-vous développer ?"""
 
 # ---------------------------------------------------------
 # Dictionnaire complet des actifs
@@ -398,7 +308,7 @@ def load_daily_pivots_data(ticker_str):
     return df_d
 
 # ---------------------------------------------------------
-# ANALYSE EXPERTE APPROFONDIE DES ACTUALITÉS & IMPACTS (IA SUR-MESURE)
+# SYNTHÈSE D'ACTUALITÉ 100% GÉNÉRÉE PAR IA GÉNÉRATIVE
 # ---------------------------------------------------------
 def get_recent_news(ticker_str, clean_asset_name="", fundamental_info=None):
     raw_articles = []
@@ -412,7 +322,7 @@ def get_recent_news(ticker_str, clean_asset_name="", fundamental_info=None):
                 source = entry.get('source', {}).get('title', 'Presse Financière')
                 title = entry.get('title', '')
                 if title:
-                    raw_articles.append(f"- Titre: {title} (Source: {source})")
+                    raw_articles.append(f"- {title} ({source})")
     except Exception:
         pass
 
@@ -424,77 +334,59 @@ def get_recent_news(ticker_str, clean_asset_name="", fundamental_info=None):
                 title = item.get('title') or item.get('content', {}).get('title', '')
                 publisher = item.get('publisher') or item.get('content', {}).get('provider', {}).get('displayName', '')
                 if title:
-                    raw_articles.append(f"- Titre: {title} (Source: {publisher})")
+                    raw_articles.append(f"- {title} ({publisher})")
     except Exception:
         pass
 
-    raw_news_str = "\n".join(raw_articles) if raw_articles else "Recherche élargie sur le secteur et les fondamentaux récents."
+    raw_news_str = "\n".join(raw_articles) if raw_articles else "Actualités mondiales et flux de marché généraux."
     fund = fundamental_info if fundamental_info else {}
 
-    expert_prompt = f"""
-    Agis en tant qu'analyste financier senior et gestionnaire de portefeuille institutionnel (Sell-Side / Buy-Side). 
-    Rédige une note de synthèse et un diagnostic micro-économique extrêmement poussé, unique et exclusif pour l'actif **{clean_asset_name}** (Ticker: {ticker_str}).
+    news_generation_prompt = f"""
+    Agis en tant qu'intelligence artificielle générative de pointe et analyste financier senior. 
+    Rédige une **synthèse d'actualité et un diagnostic micro-économique global, ouvert et hautement détaillé** pour l'actif **{clean_asset_name}** ({ticker_str}).
 
-    ### FLUX D'INFORMATIONS ET DÉPÊCHES RÉCENTES CAPTURÉS POUR CET ACTIF :
+    ### DERNIÈRES INFORMATIONS / TITRES RECENSÉS :
     {raw_news_str}
 
     ### DONNÉES FONDAMENTALES DE L'ACTIF :
-    - Nom Officiel : {clean_asset_name}
-    - Secteur & Industrie : {fund.get('sector', 'N/A')} / {fund.get('industry', 'N/A')}
-    - Capitalisation Boursière : {fund.get('marketCap', 'N/A')}
+    - Secteur / Industrie : {fund.get('sector', 'N/A')} / {fund.get('industry', 'N/A')}
+    - Capitalisation : {fund.get('marketCap', 'N/A')}
     - P/E Ratio : {fund.get('peRatio', 'N/A')}
-    - Marges bénéficiaires : {fund.get('profitMargins', 'N/A')}
-    - Résumé d'activité : {fund.get('description', 'N/A')[:600]}
+    - Résumé d'activité : {fund.get('description', 'N/A')[:500]}
 
-    CONSIGNES DE RÉDACTION STRICTES :
-    1. Interdit absolu de donner une réponse générique ou passe-partout. Chaque point doit concerner directement et précisément **{clean_asset_name}** et ses actualités concrètes ci-dessus.
-    2. Structure ta réponse exactement en 4 points détaillés sous forme de puces markdown avec des titres en gras percutants.
-    3. **Détails obligatoires par point** :
-       - **Point 1 (Décisions & Événements Majeurs)** : Liste les derniers faits marquants, annonces de direction, publications de résultats ou ruptures stratégiques propres à cet actif.
-       - **Point 2 (Impacts et Répercussions sur l'Actif)** : Analyse l'effet direct de ces événements sur la valorisation, le carnet de commandes ou les flux de trésorerie (Free Cash Flow).
-       - **Point 3 (Dynamique des Marges & Pricing Power)** : Explique comment l'entreprise répercute l'inflation ou gère ses coûts opérationnels et sa structure de dette.
-       - **Point 4 (Catalyseurs & Risques Institutionnels)** : Identifie les catalyseurs de court/moyen terme surveillés par les fonds et les risques de marché spécifiques à **{clean_asset_name}**.
-    4. N'utilise jamais de codes ISIN ou de tickers bruts, uniquement le nom propre : **{clean_asset_name}**.
+    INSTRUCTIONS DE RÉDACTION :
+    - Rédige un texte fluide, structuré et rédigé sous forme de grands paragraphes ou puces riches (style note de conjoncture d'une grande banque d'affaires).
+    - Fais preuve d'une grande ouverture d'esprit analytique : relie la dynamique actuelle de l'actif aux tendances sectorielles mondiales, aux attentes des investisseurs et à l'impact géopolitique ou monétaire global.
+    - Évite tout format robotique court : développe chaque idée avec profondeur.
     """
 
-    try:
-        if KIE_API_KEY:
-            headers = {
-                "Authorization": f"Bearer {KIE_API_KEY}",
-                "Content-Type": "application/json"
-            }
-            for model_name in ["gemini-3.8-flash", "gemini-3.7-flash"]:
-                try:
-                    payload = {
-                        "model": model_name,
-                        "messages": [{"role": "user", "content": expert_prompt}],
-                        "temperature": 0.3
-                    }
-                    res = requests.post(KIE_ENDPOINT, headers=headers, json=payload, timeout=25)
-                    if res.status_code == 200:
-                        data = res.json()
-                        content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
-                        if content:
-                            bullets = [line.strip() for line in content.split("\n") if line.strip().startswith("•") or line.strip().startswith("-") or line.strip().startswith("*")]
-                            if len(bullets) >= 3:
-                                return bullets[:4]
-                            else:
-                                # Découpage intelligent si les puces ne sont pas formatées avec des tirets stricts
-                                paragraphs = [f"• {p.strip()}" for p in content.split("\n\n") if len(p.strip()) > 20]
-                                if paragraphs:
-                                    return paragraphs[:4]
-                except Exception:
-                    continue
-    except Exception:
-        pass
+    if KIE_API_KEY:
+        for model_name in ["gemini-3.8-flash", "gemini-3.7-flash"]:
+            try:
+                headers = {
+                    "Authorization": f"Bearer {KIE_API_KEY}",
+                    "Content-Type": "application/json"
+                }
+                payload = {
+                    "model": model_name,
+                    "messages": [{"role": "user", "content": news_generation_prompt}],
+                    "temperature": 0.5
+                }
+                res = requests.post(KIE_ENDPOINT, headers=headers, json=payload, timeout=25)
+                if res.status_code == 200:
+                    data = res.json()
+                    if isinstance(data, dict):
+                        if "choices" in data and len(data["choices"]) > 0:
+                            content = data["choices"][0].get("message", {}).get("content", "")
+                            if content:
+                                return content
+                        for key in ["content", "response", "output", "text", "result"]:
+                            if key in data and data[key]:
+                                return str(data[key])
+            except Exception:
+                continue
 
-    # Repli dynamique spécifique
-    return [
-        f"• **Décisions Stratégiques & Événements Clés ({clean_asset_name}) :** Analyse des orientations décidées par la direction et des répercussions des dernières publications financières sur la structure capitalistique de {clean_asset_name}.",
-        f"• **Répercussions sur les Flux & la Valorisation :** Évaluation de l'impact des récents arbitrages de marché sur la génération d'EBITDA et les perspectives de croissance à moyen terme de {clean_asset_name}.",
-        f"• **Maîtrise des Coûts & Pricing Power :** Étude de la résilience des marges nettes face aux pressions concurrentielles et aux variations macroéconomiques sectorielles.",
-        f"• **Catalyseurs Institutionnels & Veille des Risques :** Identification des prochains seuils de publication et des facteurs de risque exogènes susceptibles d'influencer directement l'action des grands investisseurs."
-    ]
+    return f"Synthèse macro et micro-économique en cours pour {clean_asset_name}. Analyse des flux mondiaux et des perspectives sectorielles en attente de synchronisation."
 
 def get_fundamental_data(ticker_str):
     try:
@@ -555,7 +447,7 @@ def draw_interactive_chart(df, pivot, r1, r2, s1, s2, asset_name, timeframe, zoo
 
 def render_chat_interface(unique_chat_id, asset_name, ticker_symbol, report_text):
     st.markdown("---")
-    st.markdown("### 💬 Assistant Trading IA (Chat Permanent)")
+    st.markdown("### 💬 Assistant Trading IA (Chat Permanent & Conversationnel)")
     
     chat_key = f"chat_messages_{unique_chat_id}_{ticker_symbol}"
     if chat_key not in st.session_state:
@@ -565,16 +457,25 @@ def render_chat_interface(unique_chat_id, asset_name, ticker_symbol, report_text
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    if user_query := st.chat_input("Ex: Le prix actuel sur XTB est de 4134.83, refait l'analyse sur ce prix...", key=f"chat_input_widget_{unique_chat_id}"):
+    if user_query := st.chat_input("Posez vos questions sur l'actualité, la stratégie ou l'actif...", key=f"chat_input_widget_{unique_chat_id}"):
         st.session_state[chat_key].append({"role": "user", "content": user_query})
         with st.chat_message("user"):
             st.markdown(user_query)
 
         with st.chat_message("assistant"):
-            with st.spinner("Analyse experte et recalcul des niveaux en cours..."):
+            with st.spinner("Réflexion et analyse en cours..."):
                 history = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state[chat_key][:-1]])
-                prompt_chat = f"Contexte actif : {asset_name} ({ticker_symbol}). Rapport initial : {report_text}\nHistorique des échanges : {history}\nQuestion de l'utilisateur : {user_query}"
-                reply = generate_ai_report(prompt_chat)
+                prompt_chat = f"""
+                Tu es un assistant expert en finance de marché et analyste senior. Tu discutes avec un utilisateur en mode conversationnel naturel et fluide.
+                Contexte de l'actif actif : {asset_name} ({ticker_symbol}).
+                Rapport initial généré : {report_text}
+                Historique de la conversation : {history}
+                
+                Question / Message actuel de l'utilisateur : {user_query}
+
+                Réponds de manière ouverte, intelligente, détaillée et professionnelle, en t'adaptant parfaitement à sa demande (qu'il s'agisse d'actualités, de débats stratégiques, d'explications ou d'analyse). Ne te bloque pas sur un seul indicateur.
+                """
+                reply = generate_ai_report(prompt_chat, data_context={"price": 0})
                 st.markdown(reply)
                 st.session_state[chat_key].append({"role": "assistant", "content": reply})
 
@@ -655,15 +556,14 @@ if st.session_state.active_tab == "new":
         st.session_state.chat_session_id = datetime.now().strftime("%Y%m%d%H%M%S%f")
         tf_info = TIMEFRAME_MAPPING[selected_timeframe]
         
-        with st.spinner(f"Récupération fondamentale et analyse multi-sources pour {selected_asset_name}..."):
+        with st.spinner(f"Récupération fondamentale et synthèse de l'actualité par l'IA pour {selected_asset_name}..."):
             df = load_market_data(ticker_symbol, tf_info["period"], tf_info["interval"])
             df_daily = load_market_data(ticker_symbol, "6m", "1d")
             
             fundamental_info = get_fundamental_data(ticker_symbol)
             clean_display_name = fundamental_info.get("name") if fundamental_info.get("name") != ticker_symbol else selected_asset_name
             
-            recent_news_list = get_recent_news(ticker_symbol, clean_display_name, fundamental_info)
-            news_text = "\n".join(recent_news_list)
+            news_ai_summary = get_recent_news(ticker_symbol, clean_display_name, fundamental_info)
 
             if df.empty or 'Close' not in df.columns:
                 st.error(f"Erreur : Impossible de récupérer les données pour `{ticker_symbol}`. Vérifiez que le code ISIN ou le ticker est valide.")
@@ -732,8 +632,8 @@ if st.session_state.active_tab == "new":
                 Agis en tant qu'expert senior en marchés financiers, analyse micro-économique et trading institutionnel.
                 Réalise une analyse complète, rigoureuse et de niveau institutionnel pour l'actif **{clean_display_name} ({ticker_symbol})** en unité de temps **{selected_timeframe}**.
 
-                ### ACTUALITÉS RÉCENTES & DIAGNOSTIC MICRO-ÉCONOMIQUE APPROFONDI :
-                {news_text}
+                ### SYNTHÈSE D'ACTUALITÉ ET DIAGNOSTIC MICRO (GÉNÉRÉ PAR IA) :
+                {news_ai_summary}
 
                 ### DONNÉES FONDAMENTALES & SECTORIELLES :
                 - Nom Officiel : {clean_display_name}
@@ -798,7 +698,7 @@ if st.session_state.active_tab == "new":
                     "df": df,
                     "pivot": pivot,
                     "r1": r1, "r2": r2, "s1": s1, "s2": s2,
-                    "news": recent_news_list,
+                    "news": news_ai_summary,
                     "zoom_36h": zoom_36h_option,
                     "executed": False,
                     "result": "En cours / Indéterminé"
@@ -824,8 +724,8 @@ if st.session_state.active_tab == "new":
         st.plotly_chart(fig_interactive, use_container_width=True)
 
         st.markdown("---")
-        st.markdown(f"### 📰 Synthèse d'Actualité Multi-Sources & Diagnostic Micro ({ca['asset']})")
-        news_html = "<div class='news-summary-box'>" + "<br><br>".join(ca['news']) + "</div>"
+        st.markdown(f"### 📰 Synthèse d'Actualité & Diagnostic Micro (Généré par IA - {ca['asset']})")
+        news_html = f"<div class='news-summary-box'>{ca['news']}</div>"
         st.markdown(news_html, unsafe_allow_html=True)
 
         st.markdown("---")
@@ -881,8 +781,8 @@ else:
         st.plotly_chart(fig_interactive, use_container_width=True)
 
         st.markdown("---")
-        st.markdown(f"### 📰 Synthèse d'Actualité Multi-Sources & Diagnostic Micro ({entry['asset']})")
-        news_html = "<div class='news-summary-box'>" + "<br><br>".join(entry.get('news', ['Actualités non disponibles.'])) + "</div>"
+        st.markdown(f"### 📰 Synthèse d'Actualité & Diagnostic Micro (Généré par IA - {entry['asset']})")
+        news_html = f"<div class='news-summary-box'>{entry.get('news', 'Actualités non disponibles.')}</div>"
         st.markdown(news_html, unsafe_allow_html=True)
 
         st.markdown("---")
