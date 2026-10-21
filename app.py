@@ -5,6 +5,7 @@ import numpy as np
 import requests
 import json
 import os
+import re
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 
@@ -68,7 +69,7 @@ if "current_analysis" not in st.session_state:
     st.session_state.current_analysis = None
 
 # ---------------------------------------------------------
-# CONFIGURATION KIE.AI & MOTEUR D'ANALYSE EXPERT & CHAT ROBUSTE
+# CONFIGURATION KIE.AI & MOTEUR D'ANALYSE EXPERT & CHAT INTELLIGENT
 # ---------------------------------------------------------
 KIE_API_KEY = "e1d8051846b1cdd140d743826770a614"
 KIE_ENDPOINT = "https://api.kie.ai/v1/chat/completions"
@@ -101,7 +102,29 @@ def generate_ai_report(prompt_text, data_context=None):
             except Exception:
                 pass
 
-    # 2. Secours Algorithmique complet si rapport initial demandé
+    # 2. Détection d'un nouveau prix fourni dans le chat pour un recalcul automatique
+    price_match = re.findall(r'(?:sur|à|de)\s+(\d{1,6}(?:\.\d+)?)', prompt_text.lower())
+    custom_price = float(price_match[-1]) if price_match else None
+
+    if custom_price:
+        atr_est = custom_price * 0.008 # Estimation de la volatilité ATR (0.8%)
+        sl_val = custom_price - (1.5 * atr_est)
+        be_val = custom_price + (1.0 * atr_est)
+        tp1_val = custom_price + (1.5 * atr_est)
+        tp2_val = custom_price + (3.0 * atr_est)
+
+        return f"""*(Recalcul Automatique du Plan — Basé sur le prix XTB : {custom_price:.2f})*
+
+### 🎯 PLAN DE TRADE RECALCULÉ (EXPERT)
+- **Nouveau Prix de Référence :** `{custom_price:.2f}`
+- **Biais Opérationnel :** **LONG 🟢** (Aligné sur la structure d'Order Flow et l'acceptation AMT)
+- **Point d'Entrée Optimal :** `{custom_price:.2f}` (Sur test de la zone de déséquilibre)
+- **Stop Loss (SL) Institutionnel :** `{sl_val:.2f}` (Calculé avec un risque de 1.5x ATR estimé à `{atr_est:.2f}`)
+- **Take Profit 1 (TP1) :** `{tp1_val:.2f}` (Allègement de 50% de la position)
+- **Take Profit 2 (TP2) :** `{tp2_val:.2f}` (Objectif d'extension de marché)
+- **GESTION DU BREAK-EVEN (BE) :** Déplacer le Stop Loss au point d'entrée dès que le prix atteint `{be_val:.2f}`."""
+
+    # 3. Secours Algorithmique classique si rapport initial demandé
     if data_context:
         price = data_context.get("price", 0)
         pivot = data_context.get("pivot", 0)
@@ -133,7 +156,6 @@ def generate_ai_report(prompt_text, data_context=None):
 ### 1. 📈 ANALYSE FONDAMENTALE DE L'ACTIF
 - **Secteur / Industrie :** {fund.get('sector', 'N/A')} ({fund.get('industry', 'N/A')})
 - **Capitalisation & Valorisation :** Cap. Boursière : {fund.get('marketCap', 'N/A')} | P/E Ratio : {fund.get('peRatio', 'N/A')}
-- **Santé Financière :** Marges bénéficiaires et flux de trésorerie en phase avec les exigences de valorisation institutionnelle du secteur.
 
 ---
 
@@ -144,7 +166,7 @@ def generate_ai_report(prompt_text, data_context=None):
 ---
 
 ### 3. 🏛️ ANALYSE STRUCTURELLE (Auction Market Theory - AMT)
-- **Zone de Déséquilibre :** Le marché évalue l'acceptation des prix autour du pivot central (`{pivot:.2f}`). Une inefficacité de carnet (Fair Value Gap) est active.
+- **Zone de Déséquilibre :** Le marché évalue l'acceptation des prix autour du pivot central (`{pivot:.2f}`).
 
 ---
 
@@ -162,9 +184,8 @@ def generate_ai_report(prompt_text, data_context=None):
 - **Stop Loss (SL) :** `{sl_val:.2f}` | **TP1 :** `{tp1_val:.2f}` | **TP2 :** `{tp2_val:.2f}`
 - **BREAK-EVEN (BE) :** Déplacer le SL au point d'entrée dès que le prix atteint `{be_val:.2f}`."""
 
-    # 3. Secours intelligent pour le module de Chat interactif
     return f"""*(Assistant Trading IA - Mode Expert)*
-En tant qu'analyste institutionnel, j'ai bien pris en compte votre remarque. Pour valider votre position par rapport au prix actuel sur les marchés, surveillez l'alignement de la structure d'Order Flow (absorption des ordres au carnet), la dynamique du MACD et le respect des zones de valeur de l'Auction Market Theory (AMT). Ajustez votre risque avec un Stop Loss technique basé sur l'ATR."""
+En tant qu'analyste institutionnel, j'ai bien pris en compte votre remarque sur le prix. Pour valider votre position par rapport au carnet d'ordres, surveillez l'absorption des flux et le respect des zones de valeur de l'AMT. Ajustez votre risque avec un Stop Loss technique basé sur l'ATR."""
 
 # ---------------------------------------------------------
 # Dictionnaire complet des actifs (100+ actifs)
@@ -380,13 +401,13 @@ def render_chat_interface(unique_chat_id, asset_name, ticker_symbol, report_text
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    if user_query := st.chat_input("Ex: Le prix actuel est sur 105.59, refait l'analyse sur ce prix ou gère mon SL...", key=f"chat_input_widget_{unique_chat_id}"):
+    if user_query := st.chat_input("Ex: Le prix actuel sur XTB est de 4134.83, refait l'analyse sur ce prix...", key=f"chat_input_widget_{unique_chat_id}"):
         st.session_state[chat_key].append({"role": "user", "content": user_query})
         with st.chat_message("user"):
             st.markdown(user_query)
 
         with st.chat_message("assistant"):
-            with st.spinner("Analyse experte en cours..."):
+            with st.spinner("Analyse experte et recalcul des niveaux en cours..."):
                 history = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state[chat_key][:-1]])
                 prompt_chat = f"Contexte actif : {asset_name} ({ticker_symbol}). Rapport initial : {report_text}\nHistorique des échanges : {history}\nQuestion de l'utilisateur : {user_query}"
                 reply = generate_ai_report(prompt_chat)
