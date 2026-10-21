@@ -372,7 +372,6 @@ def render_chat_interface(unique_chat_id, asset_name, ticker_symbol, report_text
     st.markdown("---")
     st.markdown("### 💬 Assistant Trading IA (Chat Permanent)")
     
-    # Clé de session unique par analyse / archive pour éviter le mélange des messages
     chat_key = f"chat_messages_{unique_chat_id}_{ticker_symbol}"
     if chat_key not in st.session_state:
         st.session_state[chat_key] = []
@@ -617,6 +616,12 @@ if st.session_state.active_tab == "new":
 
     if st.session_state.current_analysis is not None:
         ca = st.session_state.current_analysis
+        
+        # Bouton Nouvelle Recherche ajouté en haut du rapport
+        if st.button("🔍 Nouvelle recherche", type="secondary", use_container_width=True):
+            st.session_state.current_analysis = None
+            st.rerun()
+
         st.markdown("---")
         st.markdown(f"## 📊 Rapport Institutionnel Expert : {ca['asset']} ({ca['tf']}) — {ca['timestamp']}")
         
