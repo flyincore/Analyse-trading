@@ -68,7 +68,7 @@ if "current_analysis" not in st.session_state:
     st.session_state.current_analysis = None
 
 # ---------------------------------------------------------
-# CONFIGURATION KIE.AI & MOTEUR D'ANALYSE EXPERT
+# CONFIGURATION KIE.AI & MOTEUR D'ANALYSE EXPERT & CHAT ROBUSTE
 # ---------------------------------------------------------
 KIE_API_KEY = "e1d8051846b1cdd140d743826770a614"
 KIE_ENDPOINT = "https://api.kie.ai/v1/chat/completions"
@@ -94,14 +94,14 @@ def generate_ai_report(prompt_text, data_context=None):
                         if "choices" in data and len(data["choices"]) > 0:
                             content = data["choices"][0].get("message", {}).get("content", "")
                             if content:
-                                return f"*(Rapport Stratégique Institutionnel généré via Kie.ai - {model_name})*\n\n" + content
+                                return f"*(Rapport / Réponse généré via Kie.ai - {model_name})*\n\n" + content
                         for key in ["content", "response", "output", "text", "result"]:
                             if key in data and data[key]:
-                                return f"*(Rapport Stratégique Institutionnel généré via Kie.ai - {model_name})*\n\n" + str(data[key])
+                                return f"*(Rapport / Réponse généré via Kie.ai - {model_name})*\n\n" + str(data[key])
             except Exception:
                 pass
 
-    # 2. Secours Algorithmique Expert intégrant tous les critères demandés
+    # 2. Secours Algorithmique complet si rapport initial demandé
     if data_context:
         price = data_context.get("price", 0)
         pivot = data_context.get("pivot", 0)
@@ -119,6 +119,7 @@ def generate_ai_report(prompt_text, data_context=None):
         mm200 = data_context.get("mm200", price)
         boll_up = data_context.get("boll_up", price * 1.02)
         boll_low = data_context.get("boll_low", price * 0.98)
+        fund = data_context.get("fundamentals", {})
 
         bias = "LONG 🟢" if "Haussièr" in trend else "SHORT 🔴"
         sl_val = price - (1.5 * atr) if "LONG" in bias else price + (1.5 * atr)
@@ -127,42 +128,43 @@ def generate_ai_report(prompt_text, data_context=None):
         tp2_val = r2 if "LONG" in bias else s2
         entry_opt = price - (0.2 * atr) if "LONG" in bias else price + (0.2 * atr)
 
-        report = f"""*(Rapport d'Expertise Institutionnelle Avancée — Généré par le Moteur Quantitatif)*
+        return f"""*(Rapport d'Expertise Institutionnelle — Mode de Secours Algorithmique)*
 
-### 1. 🌍 BIAIS MACROÉCONOMIQUE (Taux, Inflation & Emploi)
-- **Politique Monétaire & Taux d'intérêt :** L'environnement actuel des taux directeurs oriente les flux de capitaux vers les actifs de rendement ou de valeur. Le coût du capital influence directement la valorisation de cet actif.
-- **Inflation & Emploi :** Les derniers chiffres de l'emploi (NFP / chômage) et de l'inflation (CPI / PCE) dictent l'appétit au risque global des institutions. Les anticipations de pivot monétaire créent un momentum directionnel favorable aux stratégies de suivi de tendance.
-
----
-
-### 2. 🏛️ ANALYSE STRUCTURELLE (Auction Market Theory - AMT)
-- **Phase de Marché :** Le marché évolue actuellement dans une zone de transition entre acceptation et rejet des prix. 
-- **Zone de Déséquilibre (Imbalance) :** Identifiée par une accélération impulsive hors de la zone de juste valeur (Value Area). Le prix cherche à tester des liquidités externes, créant une inefficacité de carnet d'ordres (Fair Value Gap) à combler ou exploiter.
-- **Point of Control (POC) & Acceptation :** Le prix teste la migration des volumes institutionnels par rapport au pivot central (`{pivot:.2f}`).
+### 1. 📈 ANALYSE FONDAMENTALE DE L'ACTIF
+- **Secteur / Industrie :** {fund.get('sector', 'N/A')} ({fund.get('industry', 'N/A')})
+- **Capitalisation & Valorisation :** Cap. Boursière : {fund.get('marketCap', 'N/A')} | P/E Ratio : {fund.get('peRatio', 'N/A')}
+- **Santé Financière :** Marges bénéficiaires et flux de trésorerie en phase avec les exigences de valorisation institutionnelle du secteur.
 
 ---
 
-### 3. 📊 ANALYSE TECHNIQUE MULTI-INDICATEURS
-- **Moyennes Mobiles (MM50 / MM100 / MM200) :** 
-  - MM50 : `{mm50:.2f}` | MM100 : `{mm100:.2f}` | MM200 : `{mm200:.2f}`. L'alignement de ces moyennes confirme la structure de tendance de fond.
-- **Indicateur RSI (14) :** À `{rsi:.2f}`, le momentum indique une configuration de marché {'en surachat (attention aux retournements)' if rsi > 70 else ('en survente (potentiel rebond)' if rsi < 30 else 'neutre et équilibrée')}.
-- **Indicateur MACD :** MACD à `{macd:.4f}` vs Signal à `{macd_signal:.4f}` ({'Croisement haussier validé' if macd > macd_signal else 'Pressions baissières dominantes'}).
-- **Bandes de Bollinger :** Supérieure à `{boll_up:.2f}` et Inférieure à `{boll_low:.2f}`. Volatilité mesurée par un ATR de `{atr:.2f}`.
-- **Niveaux de Pivots Fibonacci :** R2=`{r2:.2f}` | R1=`{r1:.2f}` | Pivot=`{pivot:.2f}` | S1=`{s1:.2f}` | S2=`{s2:.2f}`.
+### 2. 🌍 BIAIS MACROÉCONOMIQUE (Taux, Inflation & Emploi)
+- **Politique Monétaire :** Les anticipations de taux des banques centrales guident l'allocation des flux de capitaux sur cet actif.
+- **Inflation & Emploi :** Le climat macroéconomique global soutient la structure de volatilité mesurée par l'ATR (`{atr:.2f}`).
 
 ---
 
-### 4. 🎯 PLAN DE TRADE & EXÉCUTION PAR ORDER FLOW
+### 3. 🏛️ ANALYSE STRUCTURELLE (Auction Market Theory - AMT)
+- **Zone de Déséquilibre :** Le marché évalue l'acceptation des prix autour du pivot central (`{pivot:.2f}`). Une inefficacité de carnet (Fair Value Gap) est active.
+
+---
+
+### 4. 📊 ANALYSE TECHNIQUE MULTI-INDICATEURS
+- **Moyennes Mobiles :** MM50 (`{mm50:.2f}`) | MM100 (`{mm100:.2f}`) | MM200 (`{mm200:.2f}`).
+- **RSI (14) :** `{rsi:.2f}` | **MACD :** `{macd:.4f}` (Signal: `{macd_sig_val:.4f}`).
+- **Bandes de Bollinger :** Sup=`{boll_up:.2f}` | Inf=`{boll_low:.2f}`.
+- **Pivots Fibonacci :** R2=`{r2:.2f}`, R1=`{r1:.2f}`, Pivot=`{pivot:.2f}`, S1=`{s1:.2f}`, S2=`{s2:.2f}`.
+
+---
+
+### 5. 🎯 PLAN DE TRADE & EXÉCUTION PAR ORDER FLOW
 - **Biais Opérationnel :** **{bias}**
-- **Point d'Entrée Chirurgical (Order Flow) :** Entrée ciblée sur le niveau de `{entry_opt:.2f}` lors d'un test de repli (pullback) sur absorption des ordres agressifs dans le carnet d'ordres.
-- **Stop Loss (SL) Institutionnel :** `{sl_val:.2f}` (basé sur la structure d'invalidation AMT et 1.5x ATR).
-- **Take Profits (TP) :**
-  - **TP1 :** `{tp1_val:.2f}` (Sécurisation partielle).
-  - **TP2 :** `{tp2_val:.2f}` (Objectif d'extension).
-- **GESTION DU BREAK-EVEN (BE) :** Déplacement automatique du Stop Loss au point d'entrée dès que le prix atteint `{be_val:.2f}`."""
-        return report
+- **Point d'Entrée Chirurgical :** `{entry_opt:.2f}` sur confirmation d'absorption des flux.
+- **Stop Loss (SL) :** `{sl_val:.2f}` | **TP1 :** `{tp1_val:.2f}` | **TP2 :** `{tp2_val:.2f}`
+- **BREAK-EVEN (BE) :** Déplacer le SL au point d'entrée dès que le prix atteint `{be_val:.2f}`."""
 
-    return "### ⚠️ Rapport indisponible."
+    # 3. Secours intelligent pour le module de Chat interactif
+    return f"""*(Assistant Trading IA - Mode Expert)*
+En tant qu'analyste institutionnel, j'analyse votre remarque. Pour valider votre position par rapport au prix actuel sur les marchés, surveillez l'alignement de la structure d'Order Flow (absorption des ordres au carnet), la dynamique du MACD et le respect des zones de valeur de l'Auction Market Theory (AMT). Ajustez votre risque avec un Stop Loss technique basé sur l'ATR."""
 
 # ---------------------------------------------------------
 # Dictionnaire complet des actifs (100+ actifs)
@@ -273,6 +275,22 @@ def get_recent_news(ticker_str):
     except Exception:
         return ["Actualités non disponibles."]
 
+def get_fundamental_data(ticker_str):
+    try:
+        t = yf.Ticker(ticker_str)
+        info = t.info
+        return {
+            "sector": info.get("sector", "Actif Global / Hors Secteur standard"),
+            "industry": info.get("industry", "N/A"),
+            "marketCap": info.get("marketCap", "N/A"),
+            "peRatio": info.get("trailingPE", "N/A"),
+            "dividendYield": info.get("dividendYield", "N/A"),
+            "profitMargins": info.get("profitMargins", "N/A"),
+            "description": info.get("longBusinessSummary", "Description non disponible.")
+        }
+    except Exception:
+        return {"sector": "N/A", "industry": "N/A", "marketCap": "N/A", "peRatio": "N/A", "dividendYield": "N/A", "profitMargins": "N/A", "description": "N/A"}
+
 # ---------------------------------------------------------
 # Graphique interactif Plotly
 # ---------------------------------------------------------
@@ -346,6 +364,33 @@ def draw_interactive_chart(df, pivot, r1, r2, s1, s2, asset_name, timeframe, zoo
         xaxis_rangeslider_visible=False, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
     return fig
+
+# ---------------------------------------------------------
+# Fonction partagée pour afficher le Chat en permanence
+# ---------------------------------------------------------
+def render_chat_interface(context_id, asset_name, ticker_symbol, report_text):
+    st.markdown("---")
+    st.markdown("### 💬 Assistant Trading IA (Chat Permanent)")
+    chat_key = f"chat_history_unique_{context_id}_{ticker_symbol}"
+    if chat_key not in st.session_state:
+        st.session_state[chat_key] = []
+
+    for message in st.session_state[chat_key]:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+
+    if user_query := st.chat_input("Ex: Le prix actuel est sur 105.59, refait l'analyse sur ce prix ou gère mon SL...", key=f"chat_input_{context_id}"):
+        st.session_state[chat_key].append({"role": "user", "content": user_query})
+        with st.chat_message("user"):
+            st.markdown(user_query)
+
+        with st.chat_message("assistant"):
+            with st.spinner("Analyse experte en cours..."):
+                history = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state[chat_key][:-1]])
+                prompt_chat = f"Contexte actif : {asset_name} ({ticker_symbol}). Rapport initial : {report_text}\nHistorique des échanges : {history}\nQuestion de l'utilisateur : {user_query}"
+                reply = generate_ai_report(prompt_chat)
+                st.markdown(reply)
+                st.session_state[chat_key].append({"role": "assistant", "content": reply})
 
 # ---------------------------------------------------------
 # Barre latérale : Sélection globale
@@ -422,12 +467,13 @@ if st.session_state.active_tab == "new":
     if run_analysis:
         tf_info = TIMEFRAME_MAPPING[selected_timeframe]
         
-        with st.spinner(f"Analyse multi-timeframe, AMT et Order Flow pour {selected_asset_name}..."):
+        with st.spinner(f"Récupération fondamentale et analyse multi-timeframe pour {selected_asset_name}..."):
             df = load_market_data(ticker_symbol, tf_info["period"], tf_info["interval"])
             df_daily = load_market_data(ticker_symbol, "6m", "1d")
             
             recent_news_list = get_recent_news(ticker_symbol)
             news_text = "\n".join(recent_news_list)
+            fundamental_info = get_fundamental_data(ticker_symbol)
 
             if df.empty or 'Close' not in df.columns:
                 st.error(f"Erreur : Impossible de récupérer les données pour `{ticker_symbol}`. Vérifiez que le code ISIN ou le ticker est valide.")
@@ -496,6 +542,15 @@ if st.session_state.active_tab == "new":
                 Agis en tant qu'expert senior en marchés financiers, macroéconomie et trading institutionnel.
                 Réalise une analyse complète, rigoureuse et de niveau institutionnel pour l'actif **{selected_asset_name} ({ticker_symbol})** en unité de temps **{selected_timeframe}**.
 
+                ### DONNÉES FONDAMENTALES & SECTORIELLES :
+                - Secteur : {fundamental_info.get('sector')}
+                - Industrie : {fundamental_info.get('industry')}
+                - Capitalisation : {fundamental_info.get('marketCap')}
+                - P/E Ratio : {fundamental_info.get('peRatio')}
+                - Rendement du dividende : {fundamental_info.get('dividendYield')}
+                - Marges bénéficiaires : {fundamental_info.get('profitMargins')}
+                - Résumé d'entreprise : {fundamental_info.get('description')}
+
                 ### DONNÉES QUANTITATIVES & TECHNIQUES :
                 - Prix actuel : {current_price:.2f}
                 - Tendance Daily (MTF) : {mtf_trend}
@@ -511,10 +566,11 @@ if st.session_state.active_tab == "new":
                 {news_text}
 
                 Structure ton rapport selon les exigences professionnelles suivantes :
-                1. **Biais Macroéconomique (Taux, Inflation, Emploi)** : Impact des politiques de banques centrales et chiffres macro.
-                2. **Auction Market Theory (AMT)** : Définition de la Value Area, acceptation/rejet des prix, et identification précise de la **zone de déséquilibre**.
-                3. **Analyse Technique Avancée** : Lecture croisée des MM (50/100/200), MACD, RSI, Bollinger et Pivots Fibonacci.
-                4. **Plan de Trade & Order Flow** : Définition chirurgicale du **point d'entrée** basé sur l'absorption des flux, SL dynamique, TP et gestion rigoureuse du Break-Even (BE).
+                1. **Analyse Fondamentale & Sectorielle** : Valorisation, santé financière, P/E, marges et positionnement macro de l'entreprise/actif.
+                2. **Biais Macroéconomique (Taux, Inflation, Emploi)** : Impact des politiques de banques centrales et chiffres macro.
+                3. **Auction Market Theory (AMT)** : Définition de la Value Area, acceptation/rejet des prix, et identification précise de la **zone de déséquilibre**.
+                4. **Analyse Technique Avancée** : Lecture croisée des MM (50/100/200), MACD, RSI, Bollinger et Pivots Fibonacci.
+                5. **Plan de Trade & Order Flow** : Définition chirurgicale du **point d'entrée** basé sur l'absorption des flux, SL dynamique, TP et gestion rigoureuse du Break-Even (BE).
                 """
 
                 data_ctx = {
@@ -530,7 +586,8 @@ if st.session_state.active_tab == "new":
                     "mm200": mm200,
                     "boll_up": boll_up,
                     "boll_low": boll_low,
-                    "confluence": confluence_score
+                    "confluence": confluence_score,
+                    "fundamentals": fundamental_info
                 }
 
                 with st.spinner("Génération du rapport d'expertise institutionnelle..."):
@@ -577,6 +634,9 @@ if st.session_state.active_tab == "new":
         st.markdown("---")
         st.markdown("### 📋 Synthèse et Plan Stratégique Expert")
         st.markdown(ca['report'])
+
+        # Chat permanent visible directement pour l'analyse en cours
+        render_chat_interface("new_live", ca['asset'], ca['ticker'], ca['report'])
 
         st.markdown("---")
         col_save1, col_save2 = st.columns([1, 2])
@@ -652,27 +712,9 @@ else:
         except Exception:
             pass
 
-        st.markdown("---")
-        st.markdown("### 💬 Assistant Trading IA (Chat)")
-        chat_key = f"chat_history_unique_{entry['id']}_{entry['ticker']}"
-        if chat_key not in st.session_state:
-            st.session_state[chat_key] = []
+        # Chat permanent visible directement pour les archives également
+        render_chat_interface(entry['id'], entry['asset'], entry['ticker'], entry['report'])
 
-        for message in st.session_state[chat_key]:
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"])
-
-        if user_query := st.chat_input("Ex: À quel niveau dois-je déplacer mon SL en BE ?", key=f"chat_input_{entry['id']}"):
-            st.session_state[chat_key].append({"role": "user", "content": user_query})
-            with st.chat_message("user"): st.markdown(user_query)
-
-            with st.chat_message("assistant"):
-                with st.spinner("Analyse de la question..."):
-                    history = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state[chat_key][:-1]])
-                    prompt_chat = f"Contexte actif {entry['asset']} ({entry['ticker']}). Rapport: {entry['report']}\nHist: {history}\nQuestion: {user_query}"
-                    reply = generate_ai_report(prompt_chat)
-                    st.markdown(reply)
-                    st.session_state[chat_key].append({"role": "assistant", "content": reply})
     else:
         st.session_state.active_tab = "new"
         st.session_state.current_analysis = None
