@@ -164,7 +164,7 @@ def generate_ai_report(prompt_text, data_context=None):
 
     # 3. Secours intelligent pour le module de Chat interactif
     return f"""*(Assistant Trading IA - Mode Expert)*
-En tant qu'analyste institutionnel, j'analyse votre remarque. Pour valider votre position par rapport au prix actuel sur les marchés, surveillez l'alignement de la structure d'Order Flow (absorption des ordres au carnet), la dynamique du MACD et le respect des zones de valeur de l'Auction Market Theory (AMT). Ajustez votre risque avec un Stop Loss technique basé sur l'ATR."""
+En tant qu'analyste institutionnel, j'ai bien pris en compte votre remarque. Pour valider votre position par rapport au prix actuel sur les marchés, surveillez l'alignement de la structure d'Order Flow (absorption des ordres au carnet), la dynamique du MACD et le respect des zones de valeur de l'Auction Market Theory (AMT). Ajustez votre risque avec un Stop Loss technique basé sur l'ATR."""
 
 # ---------------------------------------------------------
 # Dictionnaire complet des actifs (100+ actifs)
@@ -366,12 +366,14 @@ def draw_interactive_chart(df, pivot, r1, r2, s1, s2, asset_name, timeframe, zoo
     return fig
 
 # ---------------------------------------------------------
-# Fonction partagée pour afficher le Chat en permanence
+# Fonction partagée pour afficher le Chat permanent et isolé
 # ---------------------------------------------------------
-def render_chat_interface(context_id, asset_name, ticker_symbol, report_text):
+def render_chat_interface(unique_chat_id, asset_name, ticker_symbol, report_text):
     st.markdown("---")
     st.markdown("### 💬 Assistant Trading IA (Chat Permanent)")
-    chat_key = f"chat_history_unique_{context_id}_{ticker_symbol}"
+    
+    # Clé de session unique par analyse / archive pour éviter le mélange des messages
+    chat_key = f"chat_messages_{unique_chat_id}_{ticker_symbol}"
     if chat_key not in st.session_state:
         st.session_state[chat_key] = []
 
@@ -379,7 +381,7 @@ def render_chat_interface(context_id, asset_name, ticker_symbol, report_text):
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    if user_query := st.chat_input("Ex: Le prix actuel est sur 105.59, refait l'analyse sur ce prix ou gère mon SL...", key=f"chat_input_{context_id}"):
+    if user_query := st.chat_input("Ex: Le prix actuel est sur 105.59, refait l'analyse sur ce prix ou gère mon SL...", key=f"chat_input_widget_{unique_chat_id}"):
         st.session_state[chat_key].append({"role": "user", "content": user_query})
         with st.chat_message("user"):
             st.markdown(user_query)
@@ -635,8 +637,8 @@ if st.session_state.active_tab == "new":
         st.markdown("### 📋 Synthèse et Plan Stratégique Expert")
         st.markdown(ca['report'])
 
-        # Chat permanent visible directement pour l'analyse en cours
-        render_chat_interface("new_live", ca['asset'], ca['ticker'], ca['report'])
+        # Chat permanent isolé pour l'analyse en cours
+        render_chat_interface("live_new_analysis", ca['asset'], ca['ticker'], ca['report'])
 
         st.markdown("---")
         col_save1, col_save2 = st.columns([1, 2])
@@ -712,8 +714,8 @@ else:
         except Exception:
             pass
 
-        # Chat permanent visible directement pour les archives également
-        render_chat_interface(entry['id'], entry['asset'], entry['ticker'], entry['report'])
+        # Chat permanent isolé par ID d'archive pour chaque trade
+        render_chat_interface(f"archive_{entry['id']}", entry['asset'], entry['ticker'], entry['report'])
 
     else:
         st.session_state.active_tab = "new"
