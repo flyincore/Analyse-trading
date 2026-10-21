@@ -10,7 +10,7 @@ import plotly.graph_objects as go
 from datetime import datetime, timedelta
 
 # Configuration de la page Streamlit avec un thème global sombre / carbone
-st.set_page_config(page_title="Bot Trading IA - Version Institutionnelle Pro", layout="wide")
+st.set_page_config(page_title="Analyse Trading Pro", layout="wide")
 
 # Injection de style CSS personnalisé (effet carbone / sombre professionnel)
 st.markdown("""
@@ -43,8 +43,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.title("🎯 Bot d'Analyse Trading Pro — Suite Institutionnelle & Order Flow")
-st.markdown("Analyse experte : Macro (Taux/Inflation/Emploi), AMT (Auction Market Theory), Order Flow, Moyennes Mobiles (50/100/200), MACD, RSI, Bollinger et Pivots Fibonacci.")
+st.title("🎯 Analyse Trading Pro")
 
 # ---------------------------------------------------------
 # GESTION DE LA PERSISTANCE DE L'HISTORIQUE (FICHIER LOCAL)
