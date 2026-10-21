@@ -398,62 +398,80 @@ def load_daily_pivots_data(ticker_str):
     return df_d
 
 # ---------------------------------------------------------
-# RÉSUMÉ D'ACTUALITÉ MICRO-ÉCONOMIQUE EXPERT
+# RÉSUMÉ D'ACTUALITÉ MULTI-SOURCES & DÉCOUPAGE MICRO-ÉCONOMIQUE
 # ---------------------------------------------------------
-def get_recent_news(ticker_str, asset_name=""):
+def get_recent_news(ticker_str, clean_asset_name=""):
+    headlines = []
+    
+    # 1. Recherche par Ticker direct
     try:
         t = yf.Ticker(ticker_str)
         news = t.news
-        headlines = []
         if news and isinstance(news, list):
             for item in news[:4]:
                 title = item.get('title') or item.get('content', {}).get('title', '')
                 publisher = item.get('publisher') or item.get('content', {}).get('provider', {}).get('displayName', '')
                 if title:
-                    headlines.append(f"• **Dépêche Directe :** {title} *(Source : {publisher})*")
-        if headlines:
-            return headlines
+                    headlines.append(f"• **Dépêche Directe ({clean_asset_name}) :** {title} *(Source : {publisher})*")
     except Exception:
         pass
+        
+    # 2. Recherche étendue par yf.Search si pas de dépêches directes
+    if not headlines and clean_asset_name:
+        try:
+            search_results = yf.Search(clean_asset_name, news_count=4).news
+            if search_results and isinstance(search_results, list):
+                for item in search_results[:4]:
+                    title = item.get('title') or item.get('content', {}).get('title', '')
+                    publisher = item.get('publisher') or item.get('content', {}).get('provider', {}).get('displayName', '')
+                    if title:
+                        headlines.append(f"• **Actualité Marché ({clean_asset_name}) :** {title} *(Source : {publisher})*")
+        except Exception:
+            pass
+
+    if headlines:
+        return headlines
     
-    # Génération d'un diagnostic micro-économique approfondi selon la typologie de l'actif
-    lower_name = asset_name.lower()
+    # 3. Génération d'un diagnostic micro-économique approfondi personnalisé au NOM de l'actif
+    lower_name = clean_asset_name.lower()
     if "pétrole" in lower_name or "brent" in lower_name or "wti" in lower_name or "BZ=F" in ticker_str or "CL=F" in ticker_str:
         return [
-            "• **Rendement des Puits & Capacité Opérationnelle :** Analyse du coût marginal de production par baril (Cash Cost). Les récents arbitrages opérationnels indiquent une résistance sur les marges des raffineurs et un ajustement fin des capacités de distillation.",
-            "• **Structure des Coûts de Transport & Logistics Micro :** Les tarifs de fret maritime (supertankers VLCC) subissent des ajustements directs impactant la marge brute d'arbitrage physique entre les bassins de livraison (Europe / Asie).",
-            "• **Comportement des Raffineries & Crack Spreads :** La baisse/hausse des marges de craquage du fioul et de l'essence pèse directement sur le rythme des commandes de brut à court terme par les opérateurs de raffinage."
+            f"• **Rendement des Puits & Capacité Opérationnelle ({clean_asset_name}) :** Analyse du coût marginal de production par baril (Cash Cost). Les récents arbitrages opérationnels indiquent une résistance sur les marges des raffineurs et un ajustement fin des capacités de distillation.",
+            f"• **Structure des Coûts de Transport & Logistics Micro :** Les tarifs de fret maritime pour {clean_asset_name} subissent des ajustements directs impactant la marge brute d'arbitrage physique entre les bassins de livraison majeurs.",
+            f"• **Comportement des Raffineries & Crack Spreads :** La variation des marges de craquage du fioul et de l'essence pèse directement sur le rythme des commandes brutes de {clean_asset_name} par les opérateurs industriels."
         ]
     elif "or" in lower_name or "gold" in lower_name or "argent" in lower_name or "GC=F" in ticker_str or "SI=F" in ticker_str:
         return [
-            "• **Coûts d'Extraction & All-In Sustaining Cost (AISC) :** La dynamique micro-économique des compagnies minières montre une compression des coûts opérationnels (AISC), influençant directement le prix plancher théorique d'extraction du métal.",
-            "• **Tensions sur la Disponibilité Physique & Stocks Comex/LBMA :** Les flux de livraison physique au sein des coffres de Londres et de New York témoignent d'une préemption des lots par les acheteurs institutionnels, réduisant le flottant immédiat.",
-            "• **Demande Industrielle & Joaillerie Ciblée :** Les volumes d'achat au détail dans les hubs asiatiques et l'utilisation de l'argent dans l'industrie photovoltaïque/électronique créent un soutien fondamental de niveau micro."
+            f"• **Coûts d'Extraction & All-In Sustaining Cost (AISC) ({clean_asset_name}) :** La dynamique micro-économique des compagnies minières montre une compression des coûts opérationnels (AISC), influençant le prix plancher d'extraction pour {clean_asset_name}.",
+            f"• **Tensions sur la Disponibilité Physique & Stocks :** Les flux de livraison physique de {clean_asset_name} au sein des coffres certifiés témoignent d'une préemption des lots par les institutionnels, réduisant le flottant immédiat.",
+            f"• **Demande Industrielle & Joaillerie Ciblée :** Les volumes d'achat au détail et l'utilisation industrielle de {clean_asset_name} créent un soutien fondamental solide de niveau micro."
         ]
     elif "bitcoin" in lower_name or "ethereum" in lower_name or "crypto" in lower_name or "-USD" in ticker_str:
         return [
-            "• **Économie du Minage & Coût de Production Réseau :** L'analyse des données on-chain montre un ajustement continu de la difficulté de hachage (Hashrate), fixant le coût moyen d'électricité/équipement par unité produite.",
-            "• **Structure d'Offre des Holders & Illiquid Supply :** La part des jetons immobilisés dans des portefeuilles froids (Long-Term Holders) atteint un seuil élevé, réduisant l'offre disponible à la vente sur les plateformes d'échange.",
-            "• **Frais de Réseau & Revenus des Validateurs :** L'activité micro-économique interne de la blockchain (frais de transaction et volume applicatif) témoigne d'une utilisation réelle et d'un rendement fondamental pour l'écosystème."
+            f"• **Économie du Réseau & Coût de Production ({clean_asset_name}) :** L'analyse des données de réseau montre un ajustement continu de la difficulté, fixant le coût moyen d'équipement/énergie par unité de {clean_asset_name} produite.",
+            f"• **Structure d'Offre des Holders ({clean_asset_name}) :** La part des jetons immobilisés dans des portefeuilles froids à long terme atteint un niveau élevé, restreignant l'offre disponible sur les plateformes d'échange.",
+            f"• **Frais de Transaction & Activité Applicative :** L'utilisation réelle et le volume quotidien de transactions sur {clean_asset_name} témoignent d'un rendement fondamental pour son écosystème."
         ]
     elif "s&p" in lower_name or "nasdaq" in lower_name or "cac" in lower_name or "dax" in lower_name or "^" in ticker_str:
         return [
-            "• **Dynamique des Bénéfices par Action (EPS) :** Les révisions à la hausse/baisse des guidances de bénéfices par les analystes financiers traduisent la résilience du pricing power des entreprises composant l'indice.",
-            "• **Santé Financière & Ratios d'Endettement :** La capacité des sociétés pondérantes à refinancer leur dette à court terme sans impacter excessivement leur marge nette constitue le moteur de valorisation micro principal.",
-            "• **Rachat d'Actions (Buybacks) :** L'exécution des programmes de rachat d'actions par les méga-capitalisations apporte un soutien mécanique direct au cours des actions leaders."
+            f"• **Dynamique des Bénéfices par Action (EPS) ({clean_asset_name}) :** Les révisions à la hausse/baisse des guidances de bénéfices traduisent la résilience du pricing power des entreprises majeures composant {clean_asset_name}.",
+            f"• **Santé Financière & Ratios d'Endettement :** La capacité des sociétés pondérantes de {clean_asset_name} à refinancer leur dette sans détériorer leur marge nette constitue le moteur micro principal.",
+            f"• **Rachat d'Actions (Buybacks) :** L'exécution des programmes de rachat d'actions au sein de {clean_asset_name} apporte un soutien mécanique direct au cours des leaders du marché."
         ]
     else:
         return [
-            f"• **Analyse des Marges & Santé Financière de {asset_name or ticker_str} :** Évaluation des ratios fondamentaux de rentabilité (Free Cash Flow, marge opérationnelle et ROIC), confirmant la solidité du bilan comptable.",
-            "• **Positionnement Concurrentiel & Pricing Power :** L'actif fait preuve d'une capacité constante à répercuter l'inflation des coûts sur ses prix finaux, préservant son niveau de rentabilité micro-économique.",
-            "• **Structure de l'Offre & Carnet de Commandes :** L'analyse de l'activité commerciale récente montre une visibilité à moyen terme rassurante pour la génération de cash-flow futurs."
+            f"• **Analyse des Marges & Santé Financière ({clean_asset_name}) :** Évaluation des ratios fondamentaux de rentabilité (Free Cash Flow, marge opérationnelle), confirmant la solidité du bilan comptable de {clean_asset_name}.",
+            f"• **Positionnement Concurrentiel & Pricing Power ({clean_asset_name}) :** L'actif {clean_asset_name} fait preuve d'une capacité constante à préserver son niveau de rentabilité micro-économique.",
+            f"• **Structure de l'Offre & Carnet de Commandes ({clean_asset_name}) :** L'analyse de l'activité commerciale récente pour {clean_asset_name} montre une visibilité à moyen terme rassurante pour la génération de trésorerie."
         ]
 
 def get_fundamental_data(ticker_str):
     try:
         t = yf.Ticker(ticker_str)
         info = t.info
+        name = info.get("longName") or info.get("shortName") or ticker_str
         return {
+            "name": name,
             "sector": info.get("sector", "Actif Global / Hors Secteur standard"),
             "industry": info.get("industry", "N/A"),
             "marketCap": info.get("marketCap", "N/A"),
@@ -463,7 +481,7 @@ def get_fundamental_data(ticker_str):
             "description": info.get("longBusinessSummary", "Description non disponible.")
         }
     except Exception:
-        return {"sector": "N/A", "industry": "N/A", "marketCap": "N/A", "peRatio": "N/A", "dividendYield": "N/A", "profitMargins": "N/A", "description": "N/A"}
+        return {"name": ticker_str, "sector": "N/A", "industry": "N/A", "marketCap": "N/A", "peRatio": "N/A", "dividendYield": "N/A", "profitMargins": "N/A", "description": "N/A"}
 
 def draw_interactive_chart(df, pivot, r1, r2, s1, s2, asset_name, timeframe, zoom_36h=False):
     df_plot = df.copy()
@@ -543,7 +561,7 @@ if custom_ticker_input:
     st.sidebar.info(f"Ticker actif : `{ticker_symbol}`")
 elif custom_isin_input:
     ticker_symbol = custom_isin_input.upper()
-    selected_asset_name = f"ISIN: {ticker_symbol}"
+    selected_asset_name = custom_isin_input.upper()
     st.sidebar.info(f"Code ISIN actif : `{ticker_symbol}`")
 else:
     selected_category = st.sidebar.selectbox("Sélectionnez la Catégorie", list(ASSETS_DICTIONARY.keys()))
@@ -606,13 +624,16 @@ if st.session_state.active_tab == "new":
         st.session_state.chat_session_id = datetime.now().strftime("%Y%m%d%H%M%S%f")
         tf_info = TIMEFRAME_MAPPING[selected_timeframe]
         
-        with st.spinner(f"Récupération fondamentale et analyse multi-timeframe pour {selected_asset_name}..."):
+        with st.spinner(f"Récupération fondamentale et recherche d'actualités pour {selected_asset_name}..."):
             df = load_market_data(ticker_symbol, tf_info["period"], tf_info["interval"])
             df_daily = load_market_data(ticker_symbol, "6m", "1d")
             
-            recent_news_list = get_recent_news(ticker_symbol, selected_asset_name)
-            news_text = "\n".join(recent_news_list)
             fundamental_info = get_fundamental_data(ticker_symbol)
+            # Nom propre et lisible pour l'actualité (remplace l'ISIN ou le ticker brut)
+            clean_display_name = fundamental_info.get("name") if fundamental_info.get("name") != ticker_symbol else selected_asset_name
+            
+            recent_news_list = get_recent_news(ticker_symbol, clean_display_name)
+            news_text = "\n".join(recent_news_list)
 
             if df.empty or 'Close' not in df.columns:
                 st.error(f"Erreur : Impossible de récupérer les données pour `{ticker_symbol}`. Vérifiez que le code ISIN ou le ticker est valide.")
@@ -679,12 +700,13 @@ if st.session_state.active_tab == "new":
 
                 prompt = f"""
                 Agis en tant qu'expert senior en marchés financiers, analyse micro-économique et trading institutionnel.
-                Réalise une analyse complète, rigoureuse et de niveau institutionnel pour l'actif **{selected_asset_name} ({ticker_symbol})** en unité de temps **{selected_timeframe}**.
+                Réalise une analyse complète, rigoureuse et de niveau institutionnel pour l'actif **{clean_display_name} ({ticker_symbol})** en unité de temps **{selected_timeframe}**.
 
                 ### ACTUALITÉS RÉCENTES ET DIAGNOSTIC MICRO-ÉCONOMIQUE :
                 {news_text}
 
                 ### DONNÉES FONDAMENTALES & SECTORIELLES :
+                - Nom Officiel : {clean_display_name}
                 - Secteur : {fundamental_info.get('sector')}
                 - Industrie : {fundamental_info.get('industry')}
                 - Capitalisation : {fundamental_info.get('marketCap')}
@@ -705,7 +727,7 @@ if st.session_state.active_tab == "new":
                 - PIVOTS FIBONACCI : R2={r2:.2f}, R1={r1:.2f}, Pivot={pivot:.2f}, S1={s1:.2f}, S2={s2:.2f}
 
                 Structure ton rapport selon les exigences professionnelles suivantes :
-                1. **Analyse Micro-économique & Conjoncturelle** : Intègre les éléments d'actualité récente, la santé financière, la structure des marges et des coûts.
+                1. **Analyse Micro-économique & Conjoncturelle** : Intègre les éléments d'actualité récente, la santé financière, la structure des marges et des coûts de {clean_display_name}.
                 2. **Biais Macroéconomique (Taux, Inflation, Emploi)** : Impact des politiques monétaires et des flux globaux sur l'actif.
                 3. **Auction Market Theory (AMT)** : Définition de la Value Area, acceptation/rejet des prix, et zone de déséquilibre.
                 4. **Analyse Technique Avancée** : Lecture croisée MM (50/100/200), MACD, RSI, Bollinger et Pivots Fibonacci.
@@ -736,7 +758,7 @@ if st.session_state.active_tab == "new":
                 
                 st.session_state.current_analysis = {
                     "timestamp": timestamp_str,
-                    "asset": selected_asset_name,
+                    "asset": clean_display_name,
                     "ticker": ticker_symbol,
                     "tf": selected_timeframe,
                     "price": current_price,
@@ -772,7 +794,7 @@ if st.session_state.active_tab == "new":
         st.plotly_chart(fig_interactive, use_container_width=True)
 
         st.markdown("---")
-        st.markdown("### 📰 Synthèse d'Actualité & Diagnostic Micro-économique")
+        st.markdown(f"### 📰 Synthèse d'Actualité Multi-Sources & Diagnostic Micro ({ca['asset']})")
         news_html = "<div class='news-summary-box'>" + "<br><br>".join(ca['news']) + "</div>"
         st.markdown(news_html, unsafe_allow_html=True)
 
@@ -829,7 +851,7 @@ else:
         st.plotly_chart(fig_interactive, use_container_width=True)
 
         st.markdown("---")
-        st.markdown("### 📰 Synthèse d'Actualité & Diagnostic Micro-économique")
+        st.markdown(f"### 📰 Synthèse d'Actualité Multi-Sources & Diagnostic Micro ({entry['asset']})")
         news_html = "<div class='news-summary-box'>" + "<br><br>".join(entry.get('news', ['Actualités non disponibles.'])) + "</div>"
         st.markdown(news_html, unsafe_allow_html=True)
 
