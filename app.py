@@ -103,22 +103,34 @@ def generate_ai_report(prompt_text, data_context=None):
             except Exception:
                 pass
 
-    # 2. Détection d'un nouveau prix fourni dans le chat pour un recalcul automatique
+    # 2. Détection d'un nouveau prix fourni dans le chat pour un recalcul automatique fidèle au sens (LONG / SHORT)
     price_match = re.findall(r'(?:sur|à|de)\s+(\d{1,6}(?:\.\d+)?)', prompt_text.lower())
     custom_price = float(price_match[-1]) if price_match else None
 
     if custom_price:
+        # Détection automatique du sens initial (Short ou Long) à partir du contexte du rapport
+        is_short = "SHORT" in prompt_text.upper() or "BAISSIÈR" in prompt_text.upper() or "BAISSIER" in prompt_text.upper()
+        
         atr_est = custom_price * 0.008 # Estimation de la volatilité ATR (0.8%)
-        sl_val = custom_price - (1.5 * atr_est)
-        be_val = custom_price + (1.0 * atr_est)
-        tp1_val = custom_price + (1.5 * atr_est)
-        tp2_val = custom_price + (3.0 * atr_est)
+        
+        if is_short:
+            bias_text = "SHORT 🔴"
+            sl_val = custom_price + (1.5 * atr_est)
+            be_val = custom_price - (1.0 * atr_est)
+            tp1_val = custom_price - (1.5 * atr_est)
+            tp2_val = custom_price - (3.0 * atr_est)
+        else:
+            bias_text = "LONG 🟢"
+            sl_val = custom_price - (1.5 * atr_est)
+            be_val = custom_price + (1.0 * atr_est)
+            tp1_val = custom_price + (1.5 * atr_est)
+            tp2_val = custom_price + (3.0 * atr_est)
 
         return f"""*(Recalcul Automatique du Plan — Basé sur le prix XTB : {custom_price:.2f})*
 
 ### 🎯 PLAN DE TRADE RECALCULÉ (EXPERT)
 - **Nouveau Prix de Référence :** `{custom_price:.2f}`
-- **Biais Opérationnel :** **LONG 🟢** (Aligné sur la structure d'Order Flow et l'acceptation AMT)
+- **Biais Opérationnel :** **{bias_text}** (Préservé et aligné sur l'analyse initiale)
 - **Point d'Entrée Optimal :** `{custom_price:.2f}` (Sur test de la zone de déséquilibre)
 - **Stop Loss (SL) Institutionnel :** `{sl_val:.2f}` (Calculé avec un risque de 1.5x ATR estimé à `{atr_est:.2f}`)
 - **Take Profit 1 (TP1) :** `{tp1_val:.2f}` (Allègement de 50% de la position)
@@ -490,7 +502,6 @@ if st.session_state.active_tab == "new":
     run_analysis = st.button("🚀 Lancer l'Analyse Institutionnelle Experte", type="primary", use_container_width=True)
 
     if run_analysis:
-        # Réinitialisation de l'ID du chat pour garantir un historique propre et vide à chaque nouvelle recherche
         st.session_state.chat_session_id = datetime.now().strftime("%Y%m%d%H%M%S%f")
         tf_info = TIMEFRAME_MAPPING[selected_timeframe]
         
@@ -643,7 +654,6 @@ if st.session_state.active_tab == "new":
     if st.session_state.current_analysis is not None:
         ca = st.session_state.current_analysis
         
-        # Bouton Nouvelle Recherche avec réinitialisation propre du chat
         if st.button("🔍 Nouvelle recherche", type="secondary", use_container_width=True):
             st.session_state.current_analysis = None
             st.session_state.chat_session_id = datetime.now().strftime("%Y%m%d%H%M%S%f")
@@ -654,7 +664,7 @@ if st.session_state.active_tab == "new":
         
         m1, m2, m3 = st.columns(3)
         with m1: st.metric("Tendance Daily (MTF)", ca['mtf_trend'])
-        with m2: st.metric("Score de Confluence", f"{ca['confluence']}%")
+        with m2: st.metric("Score de Confluence", ca['confluence'])
         with m3: st.metric("Prix de Référence", f"{ca['price']:.2f}")
 
         fig_interactive = draw_interactive_chart(ca['df'], ca['pivot'], ca['r1'], ca['r2'], ca['s1'], ca['s2'], ca['asset'], ca['tf'], zoom_36h=ca['zoom_36h'])
@@ -669,7 +679,6 @@ if st.session_state.active_tab == "new":
         st.markdown("### 📋 Synthèse et Plan Stratégique Expert")
         st.markdown(ca['report'])
 
-        # Chat permanent isolé avec l'ID dynamique pour chaque nouvelle recherche
         render_chat_interface(f"live_{st.session_state.chat_session_id}", ca['asset'], ca['ticker'], ca['report'])
 
         st.markdown("---")
@@ -716,7 +725,7 @@ else:
 
         m1, m2, m3 = st.columns(3)
         with m1: st.metric("Tendance Daily", entry['mtf_trend'])
-        with m2: st.metric("Score Confluence", f"{entry['confluence']}%")
+        with m2: st.metric("Score Confluence", entry['confluence'])
         with m3: st.metric("Prix de référence", f"{entry['price']:.2f}")
 
         fig_interactive = draw_interactive_chart(entry['df'], entry['pivot'], entry['r1'], entry['r2'], entry['s1'], entry['s2'], entry['asset'], entry['tf'], zoom_36h=entry['zoom_36h'])
@@ -747,7 +756,6 @@ else:
         except Exception:
             pass
 
-        # Chat permanent isolé par ID d'archive pour chaque trade
         render_chat_interface(f"archive_{entry['id']}", entry['asset'], entry['ticker'], entry['report'])
 
     else:
