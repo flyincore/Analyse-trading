@@ -8,6 +8,7 @@ import os
 import re
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
+from supabase import create_client, Client
 
 # Configuration de la page Streamlit avec un thème global sombre / carbone
 st.set_page_config(page_title="Analyse Trading Pro", layout="wide")
@@ -55,11 +56,51 @@ st.markdown("""
 st.title("🎯 Analyse Trading Pro")
 
 # ---------------------------------------------------------
-# GESTION DE LA PERSISTANCE DE L'HISTORIQUE (FICHIER LOCAL)
+# CONNEXION SUPABASE & PERSISTANCE CLOUD DE L'HISTORIQUE
 # ---------------------------------------------------------
-HISTORY_FILE = "trade_history.json"
+def init_supabase():
+    try:
+        url = st.secrets["supabase"]["url"]
+        key = st.secrets["supabase"]["key"]
+        return create_client(url, key)
+    except Exception:
+        return None
+
+supabase_client = init_supabase()
 
 def load_persistent_history():
+    if supabase_client:
+        try:
+            response = supabase_client.table("trade_history").select("*").order("id", desc=False).execute()
+            if response.data:
+                history = []
+                for r in response.data:
+                    history.append({
+                        "id": int(r["id"]),
+                        "timestamp": str(r["timestamp"]),
+                        "asset": str(r["asset"]),
+                        "ticker": str(r["ticker"]),
+                        "tf": str(r["tf"]),
+                        "price": float(r["price"]),
+                        "mtf_trend": str(r["mtf_trend"]),
+                        "confluence": int(r["confluence"]),
+                        "report": str(r["report"]),
+                        "news": json.loads(r["news"]) if r.get("news") else [],
+                        "zoom_36h": bool(r.get("zoom_36h", True)),
+                        "executed": bool(r.get("executed", False)),
+                        "result": str(r.get("result", "En cours / Indéterminé")),
+                        "pivot": float(r.get("pivot", 0)),
+                        "r1": float(r.get("r1", 0)),
+                        "r2": float(r.get("r2", 0)),
+                        "s1": float(r.get("s1", 0)),
+                        "s2": float(r.get("s2", 0))
+                    })
+                return history
+        except Exception:
+            pass
+    
+    # Secours fichier local si Supabase n'est pas encore joint
+    HISTORY_FILE = "trade_history.json"
     if os.path.exists(HISTORY_FILE):
         try:
             with open(HISTORY_FILE, "r", encoding="utf-8") as f:
@@ -67,6 +108,66 @@ def load_persistent_history():
         except Exception:
             return []
     return []
+
+def save_history_entry(entry):
+    if supabase_client:
+        try:
+            data = {
+                "id": entry["id"],
+                "timestamp": entry["timestamp"],
+                "asset": entry["asset"],
+                "ticker": entry["ticker"],
+                "tf": entry["tf"],
+                "price": entry["price"],
+                "mtf_trend": entry["mtf_trend"],
+                "confluence": entry["confluence"],
+                "report": entry["report"],
+                "news": json.dumps(entry.get("news", []), ensure_ascii=False),
+                "zoom_36h": entry.get("zoom_36h", True),
+                "executed": entry.get("executed", False),
+                "result": entry.get("result", "En cours / Indéterminé"),
+                "pivot": entry.get("pivot", 0),
+                "r1": entry.get("r1", 0),
+                "r2": entry.get("r2", 0),
+                "s1": entry.get("s1", 0),
+                "s2": entry.get("s2", 0)
+            }
+            supabase_client.table("trade_history").upsert(data).execute()
+            return True
+        except Exception:
+            pass
+            
+    # Sauvegarde locale de secours
+    try:
+        with open("trade_history.json", "w", encoding="utf-8") as f:
+            json.dump(st.session_state.trade_history, f, ensure_ascii=False, indent=4)
+    except Exception:
+        pass
+    return True
+
+def update_supabase_status(entry_id, executed, result):
+    if supabase_client:
+        try:
+            supabase_client.table("trade_history").update({
+                "executed": executed,
+                "result": result
+            }).eq("id", entry_id).execute()
+        except Exception:
+            pass
+
+def delete_all_history_db():
+    if supabase_client:
+        try:
+            # Supprime toutes les lignes de la table Supabase
+            res = supabase_client.table("trade_history").select("id").execute()
+            if res.data:
+                ids = [row["id"] for row in res.data]
+                for i in ids:
+                    supabase_client.table("trade_history").delete().eq("id", i).execute()
+        except Exception:
+            pass
+    if os.path.exists("trade_history.json"):
+        os.remove("trade_history.json")
 
 if "trade_history" not in st.session_state:
     st.session_state.trade_history = load_persistent_history()
@@ -314,37 +415,30 @@ def get_recent_news(ticker_str, asset_name=""):
     except Exception:
         pass
     
-    # Résumé contextuel de secours complet, détaillé et rédigé de manière réfléchie (en français)
     lower_name = asset_name.lower()
     if "pétrole" in lower_name or "brent" in lower_name or "wti" in lower_name or "BZ=F" in ticker_str or "CL=F" in ticker_str:
         return [
-            "• **Équilibre Offre / Demande & OPEP+ :** Les marchés de l'énergie évoluent actuellement sous le double regard de la discipline des quotas de l'OPEP+ et des signaux contrastés de la demande industrielle mondiale (notamment en provenance de la Chine et des États-Unis).",
-            "• **Primes de Risque Géopolitique :** Les tensions persistantes dans les couloirs logistiques du Moyen-Orient et les risques d'interruption d'approvisionnement insufflent une volatilité structurelle, maintenant une prime de risque active sur les contrats à terme.",
-            "• **Rapports des Stocks & EIA :** La publication hebdomadaire des stocks de brut américains (API et EIA) continue de servir de catalyseur immédiat pour tester les zones d'acceptation et de rejet de prix au sein de l'Auction Market Theory (AMT)."
+            "• **Équilibre Offre / Demande & OPEP+ :** Les marchés de l'énergie évoluent actuellement sous le double regard de la discipline des quotas de l'OPEP+ et des signaux contrastés de la demande industrielle mondiale.",
+            "• **Primes de Risque Géopolitique :** Les tensions persistantes dans les couloirs logistiques du Moyen-Orient insufflent une volatilité structurelle, maintenant une prime de risque active sur les contrats à terme.",
+            "• **Rapports des Stocks & EIA :** La publication hebdomadaire des stocks de brut américains continue de servir de catalyseur immédiat pour tester les zones d'acceptation et de rejet de prix."
         ]
     elif "or" in lower_name or "gold" in lower_name or "argent" in lower_name or "GC=F" in ticker_str or "SI=F" in ticker_str:
         return [
-            "• **Politique Monétaire et Rendements Réels :** Le métal jaune réagit avec une grande sensibilité aux anticipations de pivot des taux directeurs de la Réserve Federale (Fed) et à la trajectoire des rendements obligataires réels à 10 ans.",
-            "• **Achats Souverains et Actif Refuge :** Les banques centrales mondiales maintiennent un rythme d'accumulation solide de leurs réserves d'or, offrant un soutien fondamental inébranlable face aux incertitudes géopolitiques et budgétaires macroéconomiques.",
-            "• **Dynamique du Dollar (DXY) :** La corrélation inverse avec l'indice du dollar reste le baromètre privilégié des fonds spéculatifs pour valider ou rejeter les tentatives de cassure des résistances institutionnelles."
+            "• **Politique Monétaire et Rendements Réels :** Le métal jaune réagit avec une grande sensibilité aux anticipations de pivot des taux directeurs de la Réserve Fédérale (Fed) et à la trajectoire des rendements obligataires.",
+            "• **Achats Souverains et Actif Refuge :** Les banques centrales mondiales maintiennent un rythme d'accumulation solide de leurs réserves d'or face aux incertitudes géopolitiques.",
+            "• **Dynamique du Dollar (DXY) :** La corrélation inverse avec l'indice du dollar reste le baromètre privilégié des fonds spéculatifs pour valider les tendances."
         ]
     elif "bitcoin" in lower_name or "ethereum" in lower_name or "crypto" in lower_name or "-USD" in ticker_str:
         return [
-            "• **Flux Institutionnels et Liquidité :** L'écosystème numérique est fortement tributaire des entrées de capitaux nets enregistrées par les fonds indiciels (ETF spot) ainsi que de la liquidité globale injectée par les banques centrales.",
-            "• **Maturation Réglementaire :** Les évolutions législatives en cours redessinent en profondeur la structure des carnets d'ordres, favorisant une institutionalisation progressive et réduisant l'impact de la volatilité purement spéculative de détail.",
-            "• **Sentiment de Marché (Risk-On) :** Le comportement des cryptomonnaies demeure intimement lié à l'appétit pour le risque global, dicté par la dynamique des marchés actions technologiques américains."
-        ]
-    elif "s&p" in lower_name or "nasdaq" in lower_name or "cac" in lower_name or "dax" in lower_name or "^" in ticker_str:
-        return [
-            "• **Indicateurs d'Inflation et Emploi :** Les publications macroéconomiques majeures (indices CPI/PCE et rapports NFP sur l'emploi) conditionnent les anticipations de atterrissage en douceur de l'économie, dictant les arbitrages des institutionnels.",
-            "• **Saisonnalité des Résultats :** L'analyse des marges opérationnelles et des prévisions de croissance des grandes capitalisations oriente la rotation sectorielle entre valeurs de croissance et valeurs défensives.",
-            "• **Structure des Marchés :** Les concentrations d'options et les flux de couverture institutionnels encadrent la volatilité technique à proximité des zones de liquidité majeure."
+            "• **Flux Institutionnels et Liquidité :** L'écosystème numérique est fortement tributaire des entrées de capitaux nets enregistrées par les fonds indiciels (ETF spot).",
+            "• **Maturation Réglementaire :** Les évolutions législatives en cours redessinent la structure des carnets d'ordres, favorisant une institutionalisation progressive.",
+            "• **Sentiment de Marché (Risk-On) :** Le comportement des cryptomonnaies demeure lié à l'appétit pour le risque global, dicté par les marchés actions."
         ]
     else:
         return [
-            f"• **Analyse Conjoncturelle de l'Actif :** L'actif **{asset_name or ticker_str}** fait l'objet d'une surveillance institutionnelle étroite, dans un climat macroéconomique global marqué par la recherche de rendement et la gestion active du risque de portefeuille.",
-            "• **Lecture des Flux (Order Flow) :** La structure des volumes d'échange met en lumière une phase de redéfinition des zones de juste valeur, nécessitant une lecture rigoureuse de l'acceptation ou du rejet des prix par les opérateurs majeurs.",
-            "• **Alignement Stratégique :** La synthèse des indicateurs techniques et fondamentaux permet d'ajuster le biais opérationnel en fonction des arbitrages en cours sur les marchés mondiaux."
+            f"• **Analyse Conjoncturelle de l'Actif :** L'actif **{asset_name or ticker_str}** fait l'objet d'une surveillance institutionnelle étroite dans un climat macroéconomique global.",
+            "• **Lecture des Flux (Order Flow) :** La structure des volumes d'échange met en lumière une phase de redéfinition des zones de juste valeur.",
+            "• **Alignement Stratégique :** La synthèse des indicateurs techniques et fondamentaux permet d'ajuster le biais opérationnel."
         ]
 
 def get_fundamental_data(ticker_str):
@@ -363,9 +457,6 @@ def get_fundamental_data(ticker_str):
     except Exception:
         return {"sector": "N/A", "industry": "N/A", "marketCap": "N/A", "peRatio": "N/A", "dividendYield": "N/A", "profitMargins": "N/A", "description": "N/A"}
 
-# ---------------------------------------------------------
-# Graphique interactif Plotly
-# ---------------------------------------------------------
 def draw_interactive_chart(df, pivot, r1, r2, s1, s2, asset_name, timeframe, zoom_36h=False):
     df_plot = df.copy()
     if zoom_36h and timeframe in ["Scalping", "M15", "H1", "H4"]:
@@ -377,26 +468,7 @@ def draw_interactive_chart(df, pivot, r1, r2, s1, s2, asset_name, timeframe, zoo
     df_reset = df_plot.reset_index()
     date_col = 'Datetime' if 'Datetime' in df_reset.columns else 'Date'
 
-    reversal_bull_x, reversal_bull_y = [], []
-    reversal_bear_x, reversal_bear_y = [], []
-
-    for i in range(2, len(df_reset) - 1):
-        prev_close = df_reset.loc[i-1, 'Close']
-        prev_open = df_reset.loc[i-1, 'Open']
-        curr_close = df_reset.loc[i, 'Close']
-        curr_open = df_reset.loc[i, 'Open']
-        curr_low = df_reset.loc[i, 'Low']
-        curr_high = df_reset.loc[i, 'High']
-
-        if (prev_close < prev_open) and (curr_close > curr_open) and (curr_close >= prev_open):
-            reversal_bull_x.append(df_reset.loc[i, date_col])
-            reversal_bull_y.append(curr_low * 0.995)
-        elif (prev_close > prev_open) and (curr_close < curr_open) and (curr_close <= prev_open):
-            reversal_bear_x.append(df_reset.loc[i, date_col])
-            reversal_bear_y.append(curr_high * 1.005)
-
     fig = go.Figure()
-
     fig.add_trace(go.Candlestick(
         x=df_reset[date_col],
         open=df_reset['Open'], high=df_reset['High'], low=df_reset['Low'], close=df_reset['Close'],
@@ -405,28 +477,15 @@ def draw_interactive_chart(df, pivot, r1, r2, s1, s2, asset_name, timeframe, zoo
         decreasing=dict(line=dict(color='#ff5252', width=1), fillcolor='#ff5252')
     ))
 
-    if 'Boll_Upper' in df_reset.columns:
-        fig.add_trace(go.Scatter(x=df_reset[date_col], y=df_reset['Boll_Upper'], mode='lines', name='Bollinger Sup', line=dict(color='rgba(100,100,255,0.4)', width=1)))
-        fig.add_trace(go.Scatter(x=df_reset[date_col], y=df_reset['Boll_Lower'], mode='lines', name='Bollinger Inf', line=dict(color='rgba(100,100,255,0.4)', width=1), fill='tonexty', fillcolor='rgba(100,100,255,0.03)'))
-
-    if reversal_bull_x:
-        fig.add_trace(go.Scatter(x=reversal_bull_x, y=reversal_bull_y, mode='markers', name='Retournement Haussier', marker=dict(symbol='triangle-up', size=12, color='#00e676')))
-    if reversal_bear_x:
-        fig.add_trace(go.Scatter(x=reversal_bear_x, y=reversal_bear_y, mode='markers', name='Retournement Baissier', marker=dict(symbol='triangle-down', size=12, color='#ff1744')))
-
     if 'MM50' in df_reset.columns and df_reset['MM50'].notna().any():
         fig.add_trace(go.Scatter(x=df_reset[date_col], y=df_reset['MM50'], mode='lines', name='MM 50', line=dict(color='#ffab40', width=1.5)))
-    if 'MM100' in df_reset.columns and df_reset['MM100'].notna().any():
-        fig.add_trace(go.Scatter(x=df_reset[date_col], y=df_reset['MM100'], mode='lines', name='MM 100', line=dict(color='#00b0ff', width=1.5)))
     if 'MM200' in df_reset.columns and df_reset['MM200'].notna().any():
         fig.add_trace(go.Scatter(x=df_reset[date_col], y=df_reset['MM200'], mode='lines', name='MM 200', line=dict(color='#e040fb', width=2)))
 
     if pivot > 0:
         fig.add_hline(y=pivot, line_dash="dash", line_color="#ffd700", annotation_text=f"Pivot: {pivot:.2f}", annotation_position="top left")
         fig.add_hline(y=r1, line_dash="dot", line_color="#ff8a80", annotation_text=f"R1: {r1:.2f}", annotation_position="top left")
-        fig.add_hline(y=r2, line_dash="dashdot", line_color="#ff5252", annotation_text=f"R2: {r2:.2f}", annotation_position="top left")
         fig.add_hline(y=s1, line_dash="dot", line_color="#b9f6ca", annotation_text=f"S1: {s1:.2f}", annotation_position="bottom left")
-        fig.add_hline(y=s2, line_dash="dashdot", line_color="#00c853", annotation_text=f"S2: {s2:.2f}", annotation_position="bottom left")
 
     zoom_label = " (Zoom Dernières 36h)" if zoom_36h and timeframe in ["M15", "H1", "H4"] else ""
     fig.update_layout(
@@ -437,9 +496,6 @@ def draw_interactive_chart(df, pivot, r1, r2, s1, s2, asset_name, timeframe, zoo
     )
     return fig
 
-# ---------------------------------------------------------
-# Fonction partagée pour afficher le Chat permanent et isolé
-# ---------------------------------------------------------
 def render_chat_interface(unique_chat_id, asset_name, ticker_symbol, report_text):
     st.markdown("---")
     st.markdown("### 💬 Assistant Trading IA (Chat Permanent)")
@@ -489,7 +545,7 @@ else:
 
 # --- Menu Historique ---
 st.sidebar.markdown("---")
-st.sidebar.header("📜 Historique")
+st.sidebar.header("📜 Historique Cloud")
 if st.session_state.trade_history:
     history_options = ["-- Nouvelle Analyse --"] + [f"{item['id']} | {item['timestamp']} - {item['asset']} ({item['tf']})" for item in st.session_state.trade_history]
     current_index = 0
@@ -514,9 +570,8 @@ if st.session_state.trade_history:
 
     with st.sidebar.expander("🗑️ Vider l'historique"):
         if st.button("Tout supprimer", use_container_width=True):
+            delete_all_history_db()
             st.session_state.trade_history = []
-            if os.path.exists(HISTORY_FILE):
-                os.remove(HISTORY_FILE)
             st.session_state.active_tab = "new"
             st.session_state.current_analysis = None
             st.session_state.chat_session_id = datetime.now().strftime("%Y%m%d%H%M%S%f")
@@ -722,7 +777,7 @@ if st.session_state.active_tab == "new":
         st.markdown("---")
         col_save1, col_save2 = st.columns([1, 2])
         with col_save1:
-            if st.button("💾 Enregistrer dans l'historique", type="primary", use_container_width=True):
+            if st.button("💾 Enregistrer dans l'historique cloud", type="primary", use_container_width=True):
                 new_id = (max([item['id'] for item in st.session_state.trade_history]) + 1) if st.session_state.trade_history else 1
                 ca_to_save = ca.copy()
                 ca_to_save['id'] = new_id
@@ -730,20 +785,16 @@ if st.session_state.active_tab == "new":
                 df_temp = ca_to_save.pop('df', None)
                 st.session_state.trade_history.append(ca_to_save)
                 
-                try:
-                    with open(HISTORY_FILE, "w", encoding="utf-8") as f:
-                        json.dump(st.session_state.trade_history, f, ensure_ascii=False, indent=4)
-                except Exception:
-                    pass
+                save_history_entry(ca_to_save)
                 
                 ca_to_save['df'] = df_temp
                 
                 st.session_state.active_tab = new_id
                 st.session_state.current_analysis = None
-                st.success("Analyse enregistrée avec succès !")
+                st.success("Analyse enregistrée définitivement dans le cloud !")
                 st.rerun()
         with col_save2:
-            st.info("💡 Cliquez pour archiver l'analyse, suivre votre position et échanger avec le module IA.")
+            st.info("💡 Cliquez pour archiver l'analyse, suivre votre position et retrouver vos données sur tous vos appareils.")
 
 else:
     entry = next((item for item in st.session_state.trade_history if item['id'] == st.session_state.active_tab), None)
@@ -793,11 +844,8 @@ else:
                 entry['result'] = "N/A"
                 st.info("Cochez 'Oui' pour consigner le résultat du trade.")
 
-        try:
-            with open(HISTORY_FILE, "w", encoding="utf-8") as f:
-                json.dump(st.session_state.trade_history, f, ensure_ascii=False, indent=4)
-        except Exception:
-            pass
+        # Met à jour Supabase en temps réel lors du changement d'état du trade
+        update_supabase_status(entry['id'], entry['executed'], entry['result'])
 
         render_chat_interface(f"archive_{entry['id']}", entry['asset'], entry['ticker'], entry['report'])
 
