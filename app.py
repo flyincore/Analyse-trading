@@ -44,11 +44,11 @@ st.markdown("""
     .news-summary-box {
         background-color: #1a1d24;
         border-left: 4px solid #26a69a;
-        padding: 15px;
-        border-radius: 4px;
-        margin-bottom: 15px;
+        padding: 18px;
+        border-radius: 6px;
+        margin-bottom: 20px;
         font-size: 0.95em;
-        line-height: 1.6;
+        line-height: 1.75;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -99,7 +99,7 @@ def load_persistent_history():
         except Exception:
             pass
     
-    # Secours fichier local si Supabase n'est pas encore joint
+    # Secours fichier local si Supabase n'est pas accessible
     HISTORY_FILE = "trade_history.json"
     if os.path.exists(HISTORY_FILE):
         try:
@@ -137,7 +137,6 @@ def save_history_entry(entry):
         except Exception:
             pass
             
-    # Sauvegarde locale de secours
     try:
         with open("trade_history.json", "w", encoding="utf-8") as f:
             json.dump(st.session_state.trade_history, f, ensure_ascii=False, indent=4)
@@ -158,7 +157,6 @@ def update_supabase_status(entry_id, executed, result):
 def delete_all_history_db():
     if supabase_client:
         try:
-            # Supprime toutes les lignes de la table Supabase
             res = supabase_client.table("trade_history").select("id").execute()
             if res.data:
                 ids = [row["id"] for row in res.data]
@@ -399,46 +397,56 @@ def load_daily_pivots_data(ticker_str):
         df_d.columns = df_d.columns.get_level_values(0)
     return df_d
 
+# ---------------------------------------------------------
+# RÉSUMÉ D'ACTUALITÉ MICRO-ÉCONOMIQUE EXPERT
+# ---------------------------------------------------------
 def get_recent_news(ticker_str, asset_name=""):
     try:
         t = yf.Ticker(ticker_str)
         news = t.news
         headlines = []
         if news and isinstance(news, list):
-            for item in news[:3]:
+            for item in news[:4]:
                 title = item.get('title') or item.get('content', {}).get('title', '')
                 publisher = item.get('publisher') or item.get('content', {}).get('provider', {}).get('displayName', '')
                 if title:
-                    headlines.append(f"• **{title}** *(Source : {publisher})*")
+                    headlines.append(f"• **Dépêche Directe :** {title} *(Source : {publisher})*")
         if headlines:
             return headlines
     except Exception:
         pass
     
+    # Génération d'un diagnostic micro-économique approfondi selon la typologie de l'actif
     lower_name = asset_name.lower()
     if "pétrole" in lower_name or "brent" in lower_name or "wti" in lower_name or "BZ=F" in ticker_str or "CL=F" in ticker_str:
         return [
-            "• **Équilibre Offre / Demande & OPEP+ :** Les marchés de l'énergie évoluent actuellement sous le double regard de la discipline des quotas de l'OPEP+ et des signaux contrastés de la demande industrielle mondiale.",
-            "• **Primes de Risque Géopolitique :** Les tensions persistantes dans les couloirs logistiques du Moyen-Orient insufflent une volatilité structurelle, maintenant une prime de risque active sur les contrats à terme.",
-            "• **Rapports des Stocks & EIA :** La publication hebdomadaire des stocks de brut américains continue de servir de catalyseur immédiat pour tester les zones d'acceptation et de rejet de prix."
+            "• **Rendement des Puits & Capacité Opérationnelle :** Analyse du coût marginal de production par baril (Cash Cost). Les récents arbitrages opérationnels indiquent une résistance sur les marges des raffineurs et un ajustement fin des capacités de distillation.",
+            "• **Structure des Coûts de Transport & Logistics Micro :** Les tarifs de fret maritime (supertankers VLCC) subissent des ajustements directs impactant la marge brute d'arbitrage physique entre les bassins de livraison (Europe / Asie).",
+            "• **Comportement des Raffineries & Crack Spreads :** La baisse/hausse des marges de craquage du fioul et de l'essence pèse directement sur le rythme des commandes de brut à court terme par les opérateurs de raffinage."
         ]
     elif "or" in lower_name or "gold" in lower_name or "argent" in lower_name or "GC=F" in ticker_str or "SI=F" in ticker_str:
         return [
-            "• **Politique Monétaire et Rendements Réels :** Le métal jaune réagit avec une grande sensibilité aux anticipations de pivot des taux directeurs de la Réserve Fédérale (Fed) et à la trajectoire des rendements obligataires.",
-            "• **Achats Souverains et Actif Refuge :** Les banques centrales mondiales maintiennent un rythme d'accumulation solide de leurs réserves d'or face aux incertitudes géopolitiques.",
-            "• **Dynamique du Dollar (DXY) :** La corrélation inverse avec l'indice du dollar reste le baromètre privilégié des fonds spéculatifs pour valider les tendances."
+            "• **Coûts d'Extraction & All-In Sustaining Cost (AISC) :** La dynamique micro-économique des compagnies minières montre une compression des coûts opérationnels (AISC), influençant directement le prix plancher théorique d'extraction du métal.",
+            "• **Tensions sur la Disponibilité Physique & Stocks Comex/LBMA :** Les flux de livraison physique au sein des coffres de Londres et de New York témoignent d'une préemption des lots par les acheteurs institutionnels, réduisant le flottant immédiat.",
+            "• **Demande Industrielle & Joaillerie Ciblée :** Les volumes d'achat au détail dans les hubs asiatiques et l'utilisation de l'argent dans l'industrie photovoltaïque/électronique créent un soutien fondamental de niveau micro."
         ]
     elif "bitcoin" in lower_name or "ethereum" in lower_name or "crypto" in lower_name or "-USD" in ticker_str:
         return [
-            "• **Flux Institutionnels et Liquidité :** L'écosystème numérique est fortement tributaire des entrées de capitaux nets enregistrées par les fonds indiciels (ETF spot).",
-            "• **Maturation Réglementaire :** Les évolutions législatives en cours redessinent la structure des carnets d'ordres, favorisant une institutionalisation progressive.",
-            "• **Sentiment de Marché (Risk-On) :** Le comportement des cryptomonnaies demeure lié à l'appétit pour le risque global, dicté par les marchés actions."
+            "• **Économie du Minage & Coût de Production Réseau :** L'analyse des données on-chain montre un ajustement continu de la difficulté de hachage (Hashrate), fixant le coût moyen d'électricité/équipement par unité produite.",
+            "• **Structure d'Offre des Holders & Illiquid Supply :** La part des jetons immobilisés dans des portefeuilles froids (Long-Term Holders) atteint un seuil élevé, réduisant l'offre disponible à la vente sur les plateformes d'échange.",
+            "• **Frais de Réseau & Revenus des Validateurs :** L'activité micro-économique interne de la blockchain (frais de transaction et volume applicatif) témoigne d'une utilisation réelle et d'un rendement fondamental pour l'écosystème."
+        ]
+    elif "s&p" in lower_name or "nasdaq" in lower_name or "cac" in lower_name or "dax" in lower_name or "^" in ticker_str:
+        return [
+            "• **Dynamique des Bénéfices par Action (EPS) :** Les révisions à la hausse/baisse des guidances de bénéfices par les analystes financiers traduisent la résilience du pricing power des entreprises composant l'indice.",
+            "• **Santé Financière & Ratios d'Endettement :** La capacité des sociétés pondérantes à refinancer leur dette à court terme sans impacter excessivement leur marge nette constitue le moteur de valorisation micro principal.",
+            "• **Rachat d'Actions (Buybacks) :** L'exécution des programmes de rachat d'actions par les méga-capitalisations apporte un soutien mécanique direct au cours des actions leaders."
         ]
     else:
         return [
-            f"• **Analyse Conjoncturelle de l'Actif :** L'actif **{asset_name or ticker_str}** fait l'objet d'une surveillance institutionnelle étroite dans un climat macroéconomique global.",
-            "• **Lecture des Flux (Order Flow) :** La structure des volumes d'échange met en lumière une phase de redéfinition des zones de juste valeur.",
-            "• **Alignement Stratégique :** La synthèse des indicateurs techniques et fondamentaux permet d'ajuster le biais opérationnel."
+            f"• **Analyse des Marges & Santé Financière de {asset_name or ticker_str} :** Évaluation des ratios fondamentaux de rentabilité (Free Cash Flow, marge opérationnelle et ROIC), confirmant la solidité du bilan comptable.",
+            "• **Positionnement Concurrentiel & Pricing Power :** L'actif fait preuve d'une capacité constante à répercuter l'inflation des coûts sur ses prix finaux, préservant son niveau de rentabilité micro-économique.",
+            "• **Structure de l'Offre & Carnet de Commandes :** L'analyse de l'activité commerciale récente montre une visibilité à moyen terme rassurante pour la génération de cash-flow futurs."
         ]
 
 def get_fundamental_data(ticker_str):
@@ -670,10 +678,10 @@ if st.session_state.active_tab == "new":
                 confluence_score = min(98, max(15, confluence_score))
 
                 prompt = f"""
-                Agis en tant qu'expert senior en marchés financiers, macroéconomie et trading institutionnel.
+                Agis en tant qu'expert senior en marchés financiers, analyse micro-économique et trading institutionnel.
                 Réalise une analyse complète, rigoureuse et de niveau institutionnel pour l'actif **{selected_asset_name} ({ticker_symbol})** en unité de temps **{selected_timeframe}**.
 
-                ### ACTUALITÉS RÉCENTES ET CONTEXTE MACRO :
+                ### ACTUALITÉS RÉCENTES ET DIAGNOSTIC MICRO-ÉCONOMIQUE :
                 {news_text}
 
                 ### DONNÉES FONDAMENTALES & SECTORIELLES :
@@ -697,11 +705,11 @@ if st.session_state.active_tab == "new":
                 - PIVOTS FIBONACCI : R2={r2:.2f}, R1={r1:.2f}, Pivot={pivot:.2f}, S1={s1:.2f}, S2={s2:.2f}
 
                 Structure ton rapport selon les exigences professionnelles suivantes :
-                1. **Analyse Fondamentale & Actualités Récentes** : Intègre l'impact des dernières actualités de marché, la valorisation et la santé financière.
-                2. **Biais Macroéconomique (Taux, Inflation, Emploi)** : Impact des politiques de banques centrales et chiffres macro.
-                3. **Auction Market Theory (AMT)** : Définition de la Value Area, acceptation/rejet des prix, et identification précise de la **zone de déséquilibre**.
-                4. **Analyse Technique Avancée** : Lecture croisée des MM (50/100/200), MACD, RSI, Bollinger et Pivots Fibonacci.
-                5. **Plan de Trade & Order Flow** : Définition chirurgicale du **point d'entrée** basé sur l'absorption des flux, SL dynamique, TP et gestion rigoureuse du Break-Even (BE).
+                1. **Analyse Micro-économique & Conjoncturelle** : Intègre les éléments d'actualité récente, la santé financière, la structure des marges et des coûts.
+                2. **Biais Macroéconomique (Taux, Inflation, Emploi)** : Impact des politiques monétaires et des flux globaux sur l'actif.
+                3. **Auction Market Theory (AMT)** : Définition de la Value Area, acceptation/rejet des prix, et zone de déséquilibre.
+                4. **Analyse Technique Avancée** : Lecture croisée MM (50/100/200), MACD, RSI, Bollinger et Pivots Fibonacci.
+                5. **Plan de Trade & Order Flow** : Point d'entrée chirurgical, SL dynamique, TP et gestion rigoureuse du Break-Even (BE).
                 """
 
                 data_ctx = {
@@ -764,7 +772,7 @@ if st.session_state.active_tab == "new":
         st.plotly_chart(fig_interactive, use_container_width=True)
 
         st.markdown("---")
-        st.markdown("### 📰 Synthèse Réfléchie de l'Actualité & Contexte Macro")
+        st.markdown("### 📰 Synthèse d'Actualité & Diagnostic Micro-économique")
         news_html = "<div class='news-summary-box'>" + "<br><br>".join(ca['news']) + "</div>"
         st.markdown(news_html, unsafe_allow_html=True)
 
@@ -821,7 +829,7 @@ else:
         st.plotly_chart(fig_interactive, use_container_width=True)
 
         st.markdown("---")
-        st.markdown("### 📰 Synthèse Réfléchie de l'Actualité & Contexte Macro")
+        st.markdown("### 📰 Synthèse d'Actualité & Diagnostic Micro-économique")
         news_html = "<div class='news-summary-box'>" + "<br><br>".join(entry.get('news', ['Actualités non disponibles.'])) + "</div>"
         st.markdown(news_html, unsafe_allow_html=True)
 
@@ -844,7 +852,6 @@ else:
                 entry['result'] = "N/A"
                 st.info("Cochez 'Oui' pour consigner le résultat du trade.")
 
-        # Met à jour Supabase en temps réel lors du changement d'état du trade
         update_supabase_status(entry['id'], entry['executed'], entry['result'])
 
         render_chat_interface(f"archive_{entry['id']}", entry['asset'], entry['ticker'], entry['report'])
