@@ -44,7 +44,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("🎯 Bot d'Analyse Trading Pro — Suite Institutionnelle")
-st.markdown("Analyse technique & fondamentale, multi-timeframe incluant le **Scalping**, score de confluence, gestion du SL en Break-Even et journal de trading (avec Fallback Gemini & Kie.ai).")
+st.markdown("Analyse technique & fondamentale, multi-timeframe incluant le **Scalping**, score de confluence, gestion du SL en Break-Even et journal de trading (avec Kie.ai prioritaire & Fallback Gemini).")
 
 # ---------------------------------------------------------
 # GESTION DE LA PERSISTANCE DE L'HISTORIQUE (FICHIER LOCAL)
@@ -69,24 +69,24 @@ if "current_analysis" not in st.session_state:
     st.session_state.current_analysis = None
 
 # ---------------------------------------------------------
-# CONFIGURATION DES CLÉS API (GEMINI & KIE.AI)
+# CONFIGURATION DES CLÉS API (KIE.AI & GEMINI)
 # ---------------------------------------------------------
+KIE_API_KEY = "e1d8051846b1cdd140d743826770a614"
+KIE_ENDPOINT = "https://api.kie.ai/v1/chat/completions"
+
 GEMINI_API_KEYS = [
     "AQ.Ab8RN6LER8j4XDy5SJbtfV6_cwWRIxnYYl9apPQ5Kf76YtyeiA",
     "AQ.Ab8RN6J9IGu0uxxlZGo2s-GGGND7nvm0nGv1aRVlaLI5BQL5IA",
     "AQ.Ab8RN6KRUrOJvrhpyETf5YPhr8VUvlSxyONYFAyUnlbfATTRsQ"
 ]
 
-KIE_API_KEY = "e1d8051846b1cdd140d743826770a614"
-KIE_ENDPOINT = "https://api.kie.ai/v1/chat/completions"
-
 def generate_ai_report(prompt_text):
     error_details = []
     
-    # 1. Tentative prioritaire via la passerelle Kie.ai (en testant plusieurs modèles supportés par leur routeur)
+    # 1. TENTATIVE PRIORITAIRE SUR KIE.AI
     if KIE_API_KEY:
-        kie_models_to_try = ['gemini-1.5-flash', 'gemini-pro', 'gemini-3.8-flash']
-        for k_model in kie_models_to_try:
+        kie_models = ['gemini-1.5-flash', 'gemini-pro']
+        for k_model in kie_models:
             try:
                 headers = {
                     "Authorization": f"Bearer {KIE_API_KEY}",
@@ -114,22 +114,14 @@ def generate_ai_report(prompt_text):
                 else:
                     error_details.append(f"Kie.ai [{k_model}] (HTTP {res.status_code}) : {res.text}")
             except Exception as e:
-                error_details.append(f"Kie.ai [{k_model}] échoué : {str(e)}")
+                error_details.append(f"Kie.ai [{k_model}] erreur : {str(e)}")
 
-    # 2. Fallback sur les clés Gemini directes (Rotation des clés et des modèles)
-    gemini_models_to_try = [
-        'gemini-3.8-flash', 
-        'gemini-3.7-flash', 
-        'gemini-3.6-flash', 
-        'gemini-3.5-flash', 
-        'gemini-1.5-flash',
-        'gemini-pro'
-    ]
-
+    # 2. FALLBACK SUR GEMINI DIRECT EN CAS D'ÉCHEC DE KIE.AI
+    gemini_models = ['gemini-1.5-flash', 'gemini-pro']
     for api_key in GEMINI_API_KEYS:
         try:
             genai.configure(api_key=api_key)
-            for m_name in gemini_models_to_try:
+            for m_name in gemini_models:
                 try:
                     m = genai.GenerativeModel(m_name)
                     response = m.generate_content(prompt_text)
@@ -141,9 +133,9 @@ def generate_ai_report(prompt_text):
                     if "429" in error_str or "quota" in error_str.lower():
                         break
         except Exception as e:
-            error_details.append(f"Erreur config Gemini (`{api_key[:8]}...`) : {str(e)}")
+            error_details.append(f"Erreur config Gemini : {str(e)}")
 
-    return "### ⚠️ Erreur critique de toutes les IA :\n\nLa passerelle Kie.ai et toutes les clés Gemini ont échoué.\n\n" + "\n\n".join(error_details)
+    return "### ⚠️ Erreur critique de toutes les IA :\n\n" + "\n\n".join(error_details)
 
 # ---------------------------------------------------------
 # Dictionnaire complet et exhaustif (100+ actifs)
@@ -501,7 +493,7 @@ if st.session_state.active_tab == "new":
                 - **GESTION DU BREAK-EVEN (BE) :** Précise explicitement à quel niveau exact de prix (ou après quel objectif atteint / nombre de pips gagnés) il convient de déplacer le Stop Loss au point d'entrée (Break-Even) pour sécuriser la position sans risque.
                 """
 
-                with st.spinner("Génération du rapport institutionnel par l'IA (Kie.ai & Fallback Gemini)..."):
+                with st.spinner("Génération du rapport institutionnel via Kie.ai..."):
                     ai_text = generate_ai_report(prompt)
 
                 timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M")
