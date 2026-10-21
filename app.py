@@ -83,8 +83,41 @@ KIE_ENDPOINT = "https://api.kie.ai/v1/chat/completions"
 def generate_ai_report(prompt_text):
     error_details = []
     
-    # Modèles élargis demandés pour la recherche
-    models_to_try = [
+    # 1. Tentative prioritaire via la passerelle Kie.ai (en testant plusieurs modèles supportés par leur routeur)
+    if KIE_API_KEY:
+        kie_models_to_try = ['gemini-1.5-flash', 'gemini-pro', 'gemini-3.8-flash']
+        for k_model in kie_models_to_try:
+            try:
+                headers = {
+                    "Authorization": f"Bearer {KIE_API_KEY}",
+                    "Content-Type": "application/json"
+                }
+                payload = {
+                    "model": k_model,
+                    "messages": [{"role": "user", "content": prompt_text}],
+                    "temperature": 0.3
+                }
+                res = requests.post(KIE_ENDPOINT, headers=headers, json=payload, timeout=30)
+                if res.status_code == 200:
+                    try:
+                        data = res.json()
+                        if isinstance(data, dict):
+                            if "choices" in data and len(data["choices"]) > 0:
+                                content = data["choices"][0].get("message", {}).get("content", "")
+                                if content:
+                                    return f"*(Rapport généré via Kie.ai - {k_model})*\n\n" + content
+                            for key in ["content", "response", "output", "text", "result"]:
+                                if key in data and data[key]:
+                                    return f"*(Rapport généré via Kie.ai - {k_model})*\n\n" + str(data[key])
+                    except Exception:
+                        pass
+                else:
+                    error_details.append(f"Kie.ai [{k_model}] (HTTP {res.status_code}) : {res.text}")
+            except Exception as e:
+                error_details.append(f"Kie.ai [{k_model}] échoué : {str(e)}")
+
+    # 2. Fallback sur les clés Gemini directes (Rotation des clés et des modèles)
+    gemini_models_to_try = [
         'gemini-3.8-flash', 
         'gemini-3.7-flash', 
         'gemini-3.6-flash', 
@@ -93,47 +126,10 @@ def generate_ai_report(prompt_text):
         'gemini-pro'
     ]
 
-    # 1. Tentative prioritaire via la passerelle Kie.ai (avec parsing robuste)
-    if KIE_API_KEY:
-        try:
-            headers = {
-                "Authorization": f"Bearer {KIE_API_KEY}",
-                "Content-Type": "application/json"
-            }
-            payload = {
-                "model": "gemini-3.8-flash",
-                "messages": [{"role": "user", "content": prompt_text}],
-                "temperature": 0.3
-            }
-            res = requests.post(KIE_ENDPOINT, headers=headers, json=payload, timeout=30)
-            if res.status_code == 200:
-                try:
-                    data = res.json()
-                    # Analyse défensive de la structure de réponse de Kie.ai
-                    if isinstance(data, dict):
-                        if "choices" in data and len(data["choices"]) > 0:
-                            content = data["choices"][0].get("message", {}).get("content", "")
-                            if content:
-                                return "*(Rapport généré via Kie.ai - gemini-3.8-flash)*\n\n" + content
-                        for key in ["content", "response", "output", "text", "result"]:
-                            if key in data and data[key]:
-                                return f"*(Rapport généré via Kie.ai)*\n\n" + str(data[key])
-                        # Si le format est inconnu, on retourne un extrait du JSON pour diagnostic
-                        error_details.append(f"Kie.ai format inconnu, clés: {list(data.keys())} - Données: {res.text[:300]}")
-                    else:
-                        error_details.append(f"Kie.ai réponse non-dict : {res.text[:300]}")
-                except Exception as parse_err:
-                    error_details.append(f"Erreur de lecture JSON Kie.ai : {str(parse_err)} (Brut: {res.text[:200]})")
-            else:
-                error_details.append(f"Kie.ai (HTTP {res.status_code}) : {res.text}")
-        except Exception as e:
-            error_details.append(f"Kie.ai échoué : {str(e)}")
-
-    # 2. Fallback sur les clés Gemini directes (Rotation des clés et des modèles élargis)
     for api_key in GEMINI_API_KEYS:
         try:
             genai.configure(api_key=api_key)
-            for m_name in models_to_try:
+            for m_name in gemini_models_to_try:
                 try:
                     m = genai.GenerativeModel(m_name)
                     response = m.generate_content(prompt_text)
@@ -483,7 +479,7 @@ if st.session_state.active_tab == "new":
 
                 Fournis un rapport complet structuré STRICTEMENT ainsi :
 
-                ### 1. 📰 ANALYSE FONDAMENTALE DE LACTIF
+                ### 1. 📰 ANALYSE FONDAMENTALE DE L'ACTIF
                 - Présentation de la santé fondamentale globale de l'actif, de son secteur et de l'environnement macroéconomique actuel.
                 - Analyse de l'impact des actualités récentes sur les perspectives de l'actif.
 
