@@ -307,35 +307,45 @@ def get_recent_news(ticker_str, asset_name=""):
                 title = item.get('title') or item.get('content', {}).get('title', '')
                 publisher = item.get('publisher') or item.get('content', {}).get('provider', {}).get('displayName', '')
                 if title:
-                    headlines.append(f"• **{title}** *(Source: {publisher})*")
+                    headlines.append(f"• **{title}** *(Source : {publisher})*")
         if headlines:
             return headlines
     except Exception:
         pass
     
-    # Fallback context intelligent selon la classe d'actif si Yahoo Finance ne renvoie rien
+    # Résumé contextuel de secours complet et entièrement en français selon la classe d'actif
     lower_name = asset_name.lower()
     if "pétrole" in lower_name or "brent" in lower_name or "wti" in lower_name or "BZ=F" in ticker_str or "CL=F" in ticker_str:
         return [
-            "• **OPEC+ Production Outlook & Supply Adjustments** *(Source: Marchés Énergétiques Globaux)*",
-            "• **Geopolitical Risk Premium & Middle East Supply Routes** *(Source: Analyse Macro Énergie)*",
-            "• **US Crude Inventory Data & EIA Weekly Report Dynamics** *(Source: Energy Information Administration)*"
+            "• **Perspectives de production de l'OPEP+ et ajustements des quotas d'offre mondiale** *(Source : Marchés Énergétiques Globaux)*",
+            "• **Prise en compte de la prime de risque géopolitique et des routes d'approvisionnement (Moyen-Orient)** *(Source : Analyse Macro Énergie)*",
+            "• **Dynamique des stocks de brut américains et rapports hebdomadaires de l'EIA** *(Source : Energy Information Administration)*",
+            "• **Impact de la transition énergétique et de la demande industrielle sur les contrats à terme** *(Source : Veille Stratégique Pétrole)*"
         ]
     elif "or" in lower_name or "gold" in lower_name or "argent" in lower_name or "GC=F" in ticker_str or "SI=F" in ticker_str:
         return [
-            "• **Central Bank Monetary Policy & Rate Cut Expectations** *(Source: Macro Precious Metals)*",
-            "• **Geopolitical Safe-Haven Flows & Institutional Hedging** *(Source: Global Markets Monitor)*",
-            "• **US Dollar Index (DXY) & Real Yields Correlations** *(Source: Financial Analysis Desk)*"
+            "• **Orientation de la politique monétaire des banques centrales et anticipations de taux directeurs** *(Source : Macro Métaux Précieux)*",
+            "• **Flux de capitaux vers les actifs refuges face aux tensions géopolitiques mondiales** *(Source : Veille Marchés Mondiaux)*",
+            "• **Corrélation inverse avec l'indice du dollar (DXY) et évolution des rendements réels obligataires** *(Source : Analyse Financière Institutionnelle)*",
+            "• **Achats massifs de lingots par les banques centrales et soutien structurel à long terme** *(Source : World Gold Council Monitor)*"
         ]
     elif "bitcoin" in lower_name or "ethereum" in lower_name or "crypto" in lower_name or "-USD" in ticker_str:
         return [
-            "• **Institutional ETF Inflows & Liquidity Metrics** *(Source: Digital Asset Research)*",
-            "• **Regulatory Updates & Macro Risk-On / Risk-Off Sentiment** *(Source: Crypto Market Wire)*"
+            "• **Flux institutionnels entrants via les ETF spot et évolution de la liquidité globale** *(Source : Recherche Actifs Numériques)*",
+            "• **Développements réglementaires internationaux et adoption par les gestionnaires d'actifs** *(Source : Crypto Market Wire)*",
+            "• **Évolution du sentiment de marché (Risk-On / Risk-Off) et corrélation avec les marchés actions tech** *(Source : Veille Crypto Institutionnelle)*"
+        ]
+    elif "s&p" in lower_name or "nasdaq" in lower_name or "cac" in lower_name or "dax" in lower_name or "^" in ticker_str:
+        return [
+            "• **Résultats macroéconomiques US/Europe (Inflation CPI, chiffres de l'emploi NFP, PIB)** *(Source : Indicateurs Macroéconomiques)*",
+            "• **Saisonnalité des publications de résultats d'entreprises et marges opérationnelles des grandes capitalisations** *(Source : Wall Street & Euronext Desk)*",
+            "• **Arbitrages sectoriels des institutionnels entre valeurs de croissance et valeurs défensives** *(Source : Stratégie de Marché Globale)*"
         ]
     else:
         return [
-            f"• **Analyse sectorielle et conjoncturelle pour {asset_name or ticker_str}** *(Source: Flux Institutionnel Global)*",
-            "• **Surveillance des flux de capitaux et des indicateurs de volatilité court terme** *(Source: Market Watch Desk)*"
+            f"• **Analyse conjoncturelle et positionnement stratégique institutionnel pour {asset_name or ticker_str}** *(Source : Flux Global)*",
+            "• **Surveillance active des volumes d'échange et de la structure de liquidité du carnet d'ordres** *(Source : Market Watch Desk)*",
+            "• **Évaluation des risques macroéconomiques globaux et de l'appétit pour le risque des investisseurs** *(Source : Note de Synthèse Pro)*"
         ]
 
 def get_fundamental_data(ticker_str):
