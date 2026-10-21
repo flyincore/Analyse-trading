@@ -77,7 +77,6 @@ GEMINI_API_KEYS = [
     "AQ.Ab8RN6KRUrOJvrhpyETf5YPhr8VUvlSxyONYFAyUnlbfATTRsQ"
 ]
 
-# Clé et configuration de l'endpoint Kie.ai
 KIE_API_KEY = "e1d8051846b1cdd140d743826770a614"
 KIE_ENDPOINT = "https://api.kie.ai/v1/chat/completions"
 
@@ -94,7 +93,7 @@ def generate_ai_report(prompt_text):
         'gemini-pro'
     ]
 
-    # 1. Tentative prioritaire via la passerelle Kie.ai (avec la nouvelle clé configurée)
+    # 1. Tentative prioritaire via la passerelle Kie.ai (avec parsing robuste)
     if KIE_API_KEY:
         try:
             headers = {
@@ -108,8 +107,23 @@ def generate_ai_report(prompt_text):
             }
             res = requests.post(KIE_ENDPOINT, headers=headers, json=payload, timeout=30)
             if res.status_code == 200:
-                content = res.json()["choices"][0]["message"]["content"]
-                return "*(Rapport généré via Kie.ai - gemini-3.8-flash)*\n\n" + content
+                try:
+                    data = res.json()
+                    # Analyse défensive de la structure de réponse de Kie.ai
+                    if isinstance(data, dict):
+                        if "choices" in data and len(data["choices"]) > 0:
+                            content = data["choices"][0].get("message", {}).get("content", "")
+                            if content:
+                                return "*(Rapport généré via Kie.ai - gemini-3.8-flash)*\n\n" + content
+                        for key in ["content", "response", "output", "text", "result"]:
+                            if key in data and data[key]:
+                                return f"*(Rapport généré via Kie.ai)*\n\n" + str(data[key])
+                        # Si le format est inconnu, on retourne un extrait du JSON pour diagnostic
+                        error_details.append(f"Kie.ai format inconnu, clés: {list(data.keys())} - Données: {res.text[:300]}")
+                    else:
+                        error_details.append(f"Kie.ai réponse non-dict : {res.text[:300]}")
+                except Exception as parse_err:
+                    error_details.append(f"Erreur de lecture JSON Kie.ai : {str(parse_err)} (Brut: {res.text[:200]})")
             else:
                 error_details.append(f"Kie.ai (HTTP {res.status_code}) : {res.text}")
         except Exception as e:
@@ -469,7 +483,7 @@ if st.session_state.active_tab == "new":
 
                 Fournis un rapport complet structuré STRICTEMENT ainsi :
 
-                ### 1. 📰 ANALYSE FONDAMENTALE DE L'ACTIF
+                ### 1. 📰 ANALYSE FONDAMENTALE DE LACTIF
                 - Présentation de la santé fondamentale globale de l'actif, de son secteur et de l'environnement macroéconomique actuel.
                 - Analyse de l'impact des actualités récentes sur les perspectives de l'actif.
 
