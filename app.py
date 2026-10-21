@@ -6,6 +6,7 @@ import requests
 import json
 import os
 import re
+import feedparser
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 from supabase import create_client, Client
@@ -99,7 +100,6 @@ def load_persistent_history():
         except Exception:
             pass
     
-    # Secours fichier local si Supabase n'est pas accessible
     HISTORY_FILE = "trade_history.json"
     if os.path.exists(HISTORY_FILE):
         try:
@@ -301,7 +301,7 @@ def generate_ai_report(prompt_text, data_context=None):
 - **BREAK-EVEN (BE) :** Déplacer le SL au point d'entrée dès que le prix atteint `{be_val:.2f}`."""
 
     return f"""*(Assistant Trading IA - Mode Expert)*
-En tant qu'analyste institutionnel, j'ai bien pris en compte votre remarque sur le prix. Pour valider votre position par rapport au carnet d'ordres, surveillez l'absorption des flux et le respect des zones de valeur de l'AMT. Ajustez votre risque avec un Stop Loss technique basé sur l'ATR."""
+En tant qu'analyste institutionnel, j'ai bien pris en compte votre remarque sur le prix. Pour valider votre position par rapport au carnet d'ordres, surveillez l'absorption des flux et le respect des zones de valeur de l'ATR."""
 
 # ---------------------------------------------------------
 # Dictionnaire complet des actifs
@@ -398,17 +398,31 @@ def load_daily_pivots_data(ticker_str):
     return df_d
 
 # ---------------------------------------------------------
-# RÉSUMÉ D'ACTUALITÉ MULTI-SOURCES & DÉCOUPAGE MICRO-ÉCONOMIQUE
+# RÉSUMÉ D'ACTUALITÉ MULTI-SOURCES (YFINANCE + GOOGLE NEWS RSS / INVESTING)
 # ---------------------------------------------------------
 def get_recent_news(ticker_str, clean_asset_name=""):
     headlines = []
     
-    # 1. Recherche par Ticker direct
+    # 1. Google News RSS Multi-Sources (Inclut Investing.com, Boursorama, Bloomberg, Les Echos...)
+    try:
+        query = clean_asset_name.replace(" ", "+")
+        rss_url = f"https://news.google.com/rss/search?q={query}+bourse+trading&hl=fr&gl=FR&ceid=FR:fr"
+        feed = feedparser.parse(rss_url)
+        if feed.entries:
+            for entry in feed.entries[:3]:
+                source = entry.get('source', {}).get('title', 'Médias Financiers')
+                title = entry.get('title', '')
+                if title:
+                    headlines.append(f"• **Actualité Marché ({clean_asset_name}) :** {title} *(Source : {source})*")
+    except Exception:
+        pass
+
+    # 2. Recherche Yahoo Finance Direct (Ticker)
     try:
         t = yf.Ticker(ticker_str)
         news = t.news
         if news and isinstance(news, list):
-            for item in news[:4]:
+            for item in news[:2]:
                 title = item.get('title') or item.get('content', {}).get('title', '')
                 publisher = item.get('publisher') or item.get('content', {}).get('provider', {}).get('displayName', '')
                 if title:
@@ -416,53 +430,53 @@ def get_recent_news(ticker_str, clean_asset_name=""):
     except Exception:
         pass
         
-    # 2. Recherche étendue par yf.Search si pas de dépêches directes
-    if not headlines and clean_asset_name:
+    # 3. Recherche élargie par yf.Search si nécessaire
+    if len(headlines) < 2 and clean_asset_name:
         try:
-            search_results = yf.Search(clean_asset_name, news_count=4).news
+            search_results = yf.Search(clean_asset_name, news_count=3).news
             if search_results and isinstance(search_results, list):
-                for item in search_results[:4]:
+                for item in search_results[:2]:
                     title = item.get('title') or item.get('content', {}).get('title', '')
                     publisher = item.get('publisher') or item.get('content', {}).get('provider', {}).get('displayName', '')
                     if title:
-                        headlines.append(f"• **Actualité Marché ({clean_asset_name}) :** {title} *(Source : {publisher})*")
+                        headlines.append(f"• **Veille Globale ({clean_asset_name}) :** {title} *(Source : {publisher})*")
         except Exception:
             pass
 
     if headlines:
         return headlines
     
-    # 3. Génération d'un diagnostic micro-économique approfondi personnalisé au NOM de l'actif
+    # 4. Diagnostic micro-économique de repli entièrement personnalisé au NOM de l'actif
     lower_name = clean_asset_name.lower()
     if "pétrole" in lower_name or "brent" in lower_name or "wti" in lower_name or "BZ=F" in ticker_str or "CL=F" in ticker_str:
         return [
-            f"• **Rendement des Puits & Capacité Opérationnelle ({clean_asset_name}) :** Analyse du coût marginal de production par baril (Cash Cost). Les récents arbitrages opérationnels indiquent une résistance sur les marges des raffineurs et un ajustement fin des capacités de distillation.",
-            f"• **Structure des Coûts de Transport & Logistics Micro :** Les tarifs de fret maritime pour {clean_asset_name} subissent des ajustements directs impactant la marge brute d'arbitrage physique entre les bassins de livraison majeurs.",
-            f"• **Comportement des Raffineries & Crack Spreads :** La variation des marges de craquage du fioul et de l'essence pèse directement sur le rythme des commandes brutes de {clean_asset_name} par les opérateurs industriels."
+            f"• **Rendement des Puits & Capacité Opérationnelle ({clean_asset_name}) :** Analyse du coût marginal de production par baril (Cash Cost). Les récents arbitrages indiquent une résistance sur les marges des raffineurs.",
+            f"• **Structure des Coûts de Transport & Logistics Micro :** Les tarifs de fret maritime pour {clean_asset_name} subissent des ajustements directs impactant la marge brute d'arbitrage physique.",
+            f"• **Comportement des Raffineries & Crack Spreads :** La variation des marges de craquage pèse directement sur le rythme des commandes de {clean_asset_name} par les opérateurs industriels."
         ]
     elif "or" in lower_name or "gold" in lower_name or "argent" in lower_name or "GC=F" in ticker_str or "SI=F" in ticker_str:
         return [
-            f"• **Coûts d'Extraction & All-In Sustaining Cost (AISC) ({clean_asset_name}) :** La dynamique micro-économique des compagnies minières montre une compression des coûts opérationnels (AISC), influençant le prix plancher d'extraction pour {clean_asset_name}.",
-            f"• **Tensions sur la Disponibilité Physique & Stocks :** Les flux de livraison physique de {clean_asset_name} au sein des coffres certifiés témoignent d'une préemption des lots par les institutionnels, réduisant le flottant immédiat.",
-            f"• **Demande Industrielle & Joaillerie Ciblée :** Les volumes d'achat au détail et l'utilisation industrielle de {clean_asset_name} créent un soutien fondamental solide de niveau micro."
+            f"• **Coûts d'Extraction & All-In Sustaining Cost (AISC) ({clean_asset_name}) :** La dynamique micro-économique des compagnies minières montre une compression des coûts opérationnels (AISC).",
+            f"• **Tensions sur la Disponibilité Physique & Stocks :** Les flux de livraison physique de {clean_asset_name} au sein des coffres témoignent d'une préemption des lots par les institutionnels.",
+            f"• **Demande Industrielle & Joaillerie Ciblée :** Les volumes d'achat et l'utilisation industrielle de {clean_asset_name} créent un soutien fondamental solide de niveau micro."
         ]
     elif "bitcoin" in lower_name or "ethereum" in lower_name or "crypto" in lower_name or "-USD" in ticker_str:
         return [
-            f"• **Économie du Réseau & Coût de Production ({clean_asset_name}) :** L'analyse des données de réseau montre un ajustement continu de la difficulté, fixant le coût moyen d'équipement/énergie par unité de {clean_asset_name} produite.",
-            f"• **Structure d'Offre des Holders ({clean_asset_name}) :** La part des jetons immobilisés dans des portefeuilles froids à long terme atteint un niveau élevé, restreignant l'offre disponible sur les plateformes d'échange.",
+            f"• **Économie du Réseau & Coût de Production ({clean_asset_name}) :** L'analyse des données de réseau montre un ajustement continu de la difficulté, fixant le coût moyen d'équipement/énergie.",
+            f"• **Structure d'Offre des Holders ({clean_asset_name}) :** La part des jetons immobilisés dans des portefeuilles à long terme restreint l'offre disponible sur les plateformes d'échange.",
             f"• **Frais de Transaction & Activité Applicative :** L'utilisation réelle et le volume quotidien de transactions sur {clean_asset_name} témoignent d'un rendement fondamental pour son écosystème."
         ]
     elif "s&p" in lower_name or "nasdaq" in lower_name or "cac" in lower_name or "dax" in lower_name or "^" in ticker_str:
         return [
-            f"• **Dynamique des Bénéfices par Action (EPS) ({clean_asset_name}) :** Les révisions à la hausse/baisse des guidances de bénéfices traduisent la résilience du pricing power des entreprises majeures composant {clean_asset_name}.",
-            f"• **Santé Financière & Ratios d'Endettement :** La capacité des sociétés pondérantes de {clean_asset_name} à refinancer leur dette sans détériorer leur marge nette constitue le moteur micro principal.",
-            f"• **Rachat d'Actions (Buybacks) :** L'exécution des programmes de rachat d'actions au sein de {clean_asset_name} apporte un soutien mécanique direct au cours des leaders du marché."
+            f"• **Dynamique des Bénéfices par Action (EPS) ({clean_asset_name}) :** Les révisions de bénéfices traduisent la résilience du pricing power des entreprises majeures composant {clean_asset_name}.",
+            f"• **Santé Financière & Ratios d'Endettement :** La capacité des sociétés pondérantes à refinancer leur dette sans détériorer leur marge nette constitue le moteur micro principal.",
+            f"• **Rachat d'Actions (Buybacks) :** L'exécution des programmes de rachat d'actions au sein de {clean_asset_name} apporte un soutien mécanique direct au cours."
         ]
     else:
         return [
-            f"• **Analyse des Marges & Santé Financière ({clean_asset_name}) :** Évaluation des ratios fondamentaux de rentabilité (Free Cash Flow, marge opérationnelle), confirmant la solidité du bilan comptable de {clean_asset_name}.",
+            f"• **Analyse des Marges & Santé Financière ({clean_asset_name}) :** Évaluation des ratios fondamentaux de rentabilité (Free Cash Flow, marge opérationnelle) de {clean_asset_name}.",
             f"• **Positionnement Concurrentiel & Pricing Power ({clean_asset_name}) :** L'actif {clean_asset_name} fait preuve d'une capacité constante à préserver son niveau de rentabilité micro-économique.",
-            f"• **Structure de l'Offre & Carnet de Commandes ({clean_asset_name}) :** L'analyse de l'activité commerciale récente pour {clean_asset_name} montre une visibilité à moyen terme rassurante pour la génération de trésorerie."
+            f"• **Structure de l'Offre & Carnet de Commandes ({clean_asset_name}) :** L'analyse de l'activité commerciale récente pour {clean_asset_name} montre une visibilité à moyen terme rassurante."
         ]
 
 def get_fundamental_data(ticker_str):
@@ -624,12 +638,11 @@ if st.session_state.active_tab == "new":
         st.session_state.chat_session_id = datetime.now().strftime("%Y%m%d%H%M%S%f")
         tf_info = TIMEFRAME_MAPPING[selected_timeframe]
         
-        with st.spinner(f"Récupération fondamentale et recherche d'actualités pour {selected_asset_name}..."):
+        with st.spinner(f"Récupération fondamentale et multi-sources d'actualités pour {selected_asset_name}..."):
             df = load_market_data(ticker_symbol, tf_info["period"], tf_info["interval"])
             df_daily = load_market_data(ticker_symbol, "6m", "1d")
             
             fundamental_info = get_fundamental_data(ticker_symbol)
-            # Nom propre et lisible pour l'actualité (remplace l'ISIN ou le ticker brut)
             clean_display_name = fundamental_info.get("name") if fundamental_info.get("name") != ticker_symbol else selected_asset_name
             
             recent_news_list = get_recent_news(ticker_symbol, clean_display_name)
@@ -702,7 +715,7 @@ if st.session_state.active_tab == "new":
                 Agis en tant qu'expert senior en marchés financiers, analyse micro-économique et trading institutionnel.
                 Réalise une analyse complète, rigoureuse et de niveau institutionnel pour l'actif **{clean_display_name} ({ticker_symbol})** en unité de temps **{selected_timeframe}**.
 
-                ### ACTUALITÉS RÉCENTES ET DIAGNOSTIC MICRO-ÉCONOMIQUE :
+                ### ACTUALITÉS RÉCENTES & VEILLE MULTI-SOURCES :
                 {news_text}
 
                 ### DONNÉES FONDAMENTALES & SECTORIELLES :
@@ -727,7 +740,7 @@ if st.session_state.active_tab == "new":
                 - PIVOTS FIBONACCI : R2={r2:.2f}, R1={r1:.2f}, Pivot={pivot:.2f}, S1={s1:.2f}, S2={s2:.2f}
 
                 Structure ton rapport selon les exigences professionnelles suivantes :
-                1. **Analyse Micro-économique & Conjoncturelle** : Intègre les éléments d'actualité récente, la santé financière, la structure des marges et des coûts de {clean_display_name}.
+                1. **Analyse Micro-économique & Conjoncturelle** : Intègre les éléments d'actualité récente multi-sources, la santé financière, la structure des marges et des coûts de {clean_display_name}.
                 2. **Biais Macroéconomique (Taux, Inflation, Emploi)** : Impact des politiques monétaires et des flux globaux sur l'actif.
                 3. **Auction Market Theory (AMT)** : Définition de la Value Area, acceptation/rejet des prix, et zone de déséquilibre.
                 4. **Analyse Technique Avancée** : Lecture croisée MM (50/100/200), MACD, RSI, Bollinger et Pivots Fibonacci.
