@@ -185,7 +185,8 @@ KIE_ENDPOINT = "https://api.kie.ai/v1/chat/completions"
 
 def generate_ai_report(prompt_text, data_context=None):
     if KIE_API_KEY:
-        for model_name in ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-1.5-flash"]:
+        # Restriction exclusive sur Gemini 3.8 Flash et Gemini 3.7 Flash
+        for model_name in ["gemini-3.8-flash", "gemini-3.7-flash"]:
             try:
                 headers = {
                     "Authorization": f"Bearer {KIE_API_KEY}",
@@ -398,86 +399,97 @@ def load_daily_pivots_data(ticker_str):
     return df_d
 
 # ---------------------------------------------------------
-# RÉSUMÉ D'ACTUALITÉ MULTI-SOURCES (YFINANCE + GOOGLE NEWS RSS / INVESTING)
+# RÉSUMÉ D'ACTUALITÉ & DIAGNOSTIC MICRO-ÉCONOMIQUE APPROFONDI (GEMINI 3.8 / 3.7 FLASH)
 # ---------------------------------------------------------
-def get_recent_news(ticker_str, clean_asset_name=""):
-    headlines = []
+def get_recent_news(ticker_str, clean_asset_name="", fundamental_info=None):
+    raw_articles = []
     
-    # 1. Google News RSS Multi-Sources (Inclut Investing.com, Boursorama, Bloomberg, Les Echos...)
+    # 1. Google News RSS Multi-Sources (Investing, Boursorama, Bloomberg, Les Echos...)
     try:
         query = clean_asset_name.replace(" ", "+")
         rss_url = f"https://news.google.com/rss/search?q={query}+bourse+trading&hl=fr&gl=FR&ceid=FR:fr"
         feed = feedparser.parse(rss_url)
         if feed.entries:
-            for entry in feed.entries[:3]:
-                source = entry.get('source', {}).get('title', 'Médias Financiers')
+            for entry in feed.entries[:4]:
+                source = entry.get('source', {}).get('title', 'Presse Financière')
                 title = entry.get('title', '')
                 if title:
-                    headlines.append(f"• **Actualité Marché ({clean_asset_name}) :** {title} *(Source : {source})*")
+                    raw_articles.append(f"- Titre: {title} (Source: {source})")
     except Exception:
         pass
 
-    # 2. Recherche Yahoo Finance Direct (Ticker)
+    # 2. Yahoo Finance Direct
     try:
         t = yf.Ticker(ticker_str)
         news = t.news
         if news and isinstance(news, list):
-            for item in news[:2]:
+            for item in news[:3]:
                 title = item.get('title') or item.get('content', {}).get('title', '')
                 publisher = item.get('publisher') or item.get('content', {}).get('provider', {}).get('displayName', '')
                 if title:
-                    headlines.append(f"• **Dépêche Directe ({clean_asset_name}) :** {title} *(Source : {publisher})*")
+                    raw_articles.append(f"- Titre: {title} (Source: {publisher})")
     except Exception:
         pass
-        
-    # 3. Recherche élargie par yf.Search si nécessaire
-    if len(headlines) < 2 and clean_asset_name:
-        try:
-            search_results = yf.Search(clean_asset_name, news_count=3).news
-            if search_results and isinstance(search_results, list):
-                for item in search_results[:2]:
-                    title = item.get('title') or item.get('content', {}).get('title', '')
-                    publisher = item.get('publisher') or item.get('content', {}).get('provider', {}).get('displayName', '')
-                    if title:
-                        headlines.append(f"• **Veille Globale ({clean_asset_name}) :** {title} *(Source : {publisher})*")
-        except Exception:
-            pass
 
-    if headlines:
-        return headlines
-    
-    # 4. Diagnostic micro-économique de repli entièrement personnalisé au NOM de l'actif
-    lower_name = clean_asset_name.lower()
-    if "pétrole" in lower_name or "brent" in lower_name or "wti" in lower_name or "BZ=F" in ticker_str or "CL=F" in ticker_str:
-        return [
-            f"• **Rendement des Puits & Capacité Opérationnelle ({clean_asset_name}) :** Analyse du coût marginal de production par baril (Cash Cost). Les récents arbitrages indiquent une résistance sur les marges des raffineurs.",
-            f"• **Structure des Coûts de Transport & Logistics Micro :** Les tarifs de fret maritime pour {clean_asset_name} subissent des ajustements directs impactant la marge brute d'arbitrage physique.",
-            f"• **Comportement des Raffineries & Crack Spreads :** La variation des marges de craquage pèse directement sur le rythme des commandes de {clean_asset_name} par les opérateurs industriels."
-        ]
-    elif "or" in lower_name or "gold" in lower_name or "argent" in lower_name or "GC=F" in ticker_str or "SI=F" in ticker_str:
-        return [
-            f"• **Coûts d'Extraction & All-In Sustaining Cost (AISC) ({clean_asset_name}) :** La dynamique micro-économique des compagnies minières montre une compression des coûts opérationnels (AISC).",
-            f"• **Tensions sur la Disponibilité Physique & Stocks :** Les flux de livraison physique de {clean_asset_name} au sein des coffres témoignent d'une préemption des lots par les institutionnels.",
-            f"• **Demande Industrielle & Joaillerie Ciblée :** Les volumes d'achat et l'utilisation industrielle de {clean_asset_name} créent un soutien fondamental solide de niveau micro."
-        ]
-    elif "bitcoin" in lower_name or "ethereum" in lower_name or "crypto" in lower_name or "-USD" in ticker_str:
-        return [
-            f"• **Économie du Réseau & Coût de Production ({clean_asset_name}) :** L'analyse des données de réseau montre un ajustement continu de la difficulté, fixant le coût moyen d'équipement/énergie.",
-            f"• **Structure d'Offre des Holders ({clean_asset_name}) :** La part des jetons immobilisés dans des portefeuilles à long terme restreint l'offre disponible sur les plateformes d'échange.",
-            f"• **Frais de Transaction & Activité Applicative :** L'utilisation réelle et le volume quotidien de transactions sur {clean_asset_name} témoignent d'un rendement fondamental pour son écosystème."
-        ]
-    elif "s&p" in lower_name or "nasdaq" in lower_name or "cac" in lower_name or "dax" in lower_name or "^" in ticker_str:
-        return [
-            f"• **Dynamique des Bénéfices par Action (EPS) ({clean_asset_name}) :** Les révisions de bénéfices traduisent la résilience du pricing power des entreprises majeures composant {clean_asset_name}.",
-            f"• **Santé Financière & Ratios d'Endettement :** La capacité des sociétés pondérantes à refinancer leur dette sans détériorer leur marge nette constitue le moteur micro principal.",
-            f"• **Rachat d'Actions (Buybacks) :** L'exécution des programmes de rachat d'actions au sein de {clean_asset_name} apporte un soutien mécanique direct au cours."
-        ]
-    else:
-        return [
-            f"• **Analyse des Marges & Santé Financière ({clean_asset_name}) :** Évaluation des ratios fondamentaux de rentabilité (Free Cash Flow, marge opérationnelle) de {clean_asset_name}.",
-            f"• **Positionnement Concurrentiel & Pricing Power ({clean_asset_name}) :** L'actif {clean_asset_name} fait preuve d'une capacité constante à préserver son niveau de rentabilité micro-économique.",
-            f"• **Structure de l'Offre & Carnet de Commandes ({clean_asset_name}) :** L'analyse de l'activité commerciale récente pour {clean_asset_name} montre une visibilité à moyen terme rassurante."
-        ]
+    raw_news_str = "\n".join(raw_articles) if raw_articles else "Aucune dépêche directe immédiate trouvée."
+    fund = fundamental_info if fundamental_info else {}
+
+    micro_prompt = f"""
+    En tant qu'analyste senior spécialisé en stratégie d'entreprise et micro-économie financière institutionnelle, rédige un diagnostic micro-économique extrêmement approfondi et professionnel pour l'actif **{clean_asset_name}** ({ticker_symbol}).
+
+    ### DÉPÊCHES RECENTES ET DÉTECTÉES EN DIRECT :
+    {raw_news_str}
+
+    ### ÉLÉMENTS FONDAMENTAUX DISPONIBLES :
+    - Secteur : {fund.get('sector', 'N/A')}
+    - Industrie : {fund.get('industry', 'N/A')}
+    - Capitalisation Boursière : {fund.get('marketCap', 'N/A')}
+    - P/E Ratio (Valorisation) : {fund.get('peRatio', 'N/A')}
+    - Marge bénéficiaire : {fund.get('profitMargins', 'N/A')}
+    - Rendement Dividende : {fund.get('dividendYield', 'N/A')}
+
+    CONSIGNES STRICTES DE RÉDACTION :
+    - Adopte un ton d'analyste sell-side / buy-side institutionnel (très qualitatif, concis mais dense et technique).
+    - Rédige exactement 4 points stratégiques structurés sous forme de puces markdown avec titres en gras.
+    - Évite la généralité : aborde la dynamique des marges, le pricing power, la structure des coûts (opératoires / d'extraction / financiers), les catalyseurs de court/moyen terme et la situation concurrentielle spécifique à **{clean_asset_name}**.
+    - Ne fais JAMAIS référence à un code ISIN ou un ticker brut dans les descriptions, utilise uniquement le nom exact : **{clean_asset_name}**.
+    """
+
+    try:
+        if KIE_API_KEY:
+            headers = {
+                "Authorization": f"Bearer {KIE_API_KEY}",
+                "Content-Type": "application/json"
+            }
+            # Utilisation prioritaire de Gemini 3.8 Flash et Gemini 3.7 Flash
+            for micro_model in ["gemini-3.8-flash", "gemini-3.7-flash"]:
+                try:
+                    payload = {
+                        "model": micro_model,
+                        "messages": [{"role": "user", "content": micro_prompt}],
+                        "temperature": 0.2
+                    }
+                    res = requests.post(KIE_ENDPOINT, headers=headers, json=payload, timeout=15)
+                    if res.status_code == 200:
+                        data = res.json()
+                        content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                        if content:
+                            bullets = [line.strip() for line in content.split("\n") if line.strip().startswith("•") or line.strip().startswith("-") or line.strip().startswith("*")]
+                            if len(bullets) >= 3:
+                                return bullets[:4]
+                            else:
+                                return [content]
+                except Exception:
+                    continue
+    except Exception:
+        pass
+
+    return [
+        f"• **Dynamique des Marges & Pricing Power ({clean_asset_name}) :** Évaluation de la capacité de l'actif à répercuter l'inflation des coûts sur ses prix de vente sans dégrader son carnet de commandes ni sa part de marché relative.",
+        f"• **Structure des Coûts Opérationnels & Levier Financier :** Analyse du besoin en fonds de roulement (BFR), du refinancement des dettes et de la maîtrise du Cash Cost opératoire face au contexte économique actuel.",
+        f"• **Catalyseurs Micro-économiques & Visibilité du Cash-Flow :** Analyse des prochains rendez-vous financiers et des perspectives d'EBITDA/Free Cash Flow récurrent pour soutenir la valorisation globale.",
+        f"• **Positionnement Concurrentiel & Risques Spécifiques ({clean_asset_name}) :** Veille sur la structure de l'offre, la pression réglementaire et la résilience du modèle d'affaires face aux acteurs majeurs du secteur."
+    ]
 
 def get_fundamental_data(ticker_str):
     try:
@@ -638,14 +650,14 @@ if st.session_state.active_tab == "new":
         st.session_state.chat_session_id = datetime.now().strftime("%Y%m%d%H%M%S%f")
         tf_info = TIMEFRAME_MAPPING[selected_timeframe]
         
-        with st.spinner(f"Récupération fondamentale et multi-sources d'actualités pour {selected_asset_name}..."):
+        with st.spinner(f"Récupération fondamentale et analyse multi-sources pour {selected_asset_name}..."):
             df = load_market_data(ticker_symbol, tf_info["period"], tf_info["interval"])
             df_daily = load_market_data(ticker_symbol, "6m", "1d")
             
             fundamental_info = get_fundamental_data(ticker_symbol)
             clean_display_name = fundamental_info.get("name") if fundamental_info.get("name") != ticker_symbol else selected_asset_name
             
-            recent_news_list = get_recent_news(ticker_symbol, clean_display_name)
+            recent_news_list = get_recent_news(ticker_symbol, clean_display_name, fundamental_info)
             news_text = "\n".join(recent_news_list)
 
             if df.empty or 'Close' not in df.columns:
@@ -715,7 +727,7 @@ if st.session_state.active_tab == "new":
                 Agis en tant qu'expert senior en marchés financiers, analyse micro-économique et trading institutionnel.
                 Réalise une analyse complète, rigoureuse et de niveau institutionnel pour l'actif **{clean_display_name} ({ticker_symbol})** en unité de temps **{selected_timeframe}**.
 
-                ### ACTUALITÉS RÉCENTES & VEILLE MULTI-SOURCES :
+                ### ACTUALITÉS RÉCENTES & DIAGNOSTIC MICRO-ÉCONOMIQUE APPROFONDI :
                 {news_text}
 
                 ### DONNÉES FONDAMENTALES & SECTORIELLES :
@@ -740,7 +752,7 @@ if st.session_state.active_tab == "new":
                 - PIVOTS FIBONACCI : R2={r2:.2f}, R1={r1:.2f}, Pivot={pivot:.2f}, S1={s1:.2f}, S2={s2:.2f}
 
                 Structure ton rapport selon les exigences professionnelles suivantes :
-                1. **Analyse Micro-économique & Conjoncturelle** : Intègre les éléments d'actualité récente multi-sources, la santé financière, la structure des marges et des coûts de {clean_display_name}.
+                1. **Analyse Micro-économique & Conjoncturelle** : Intègre les éléments d'actualité récente, la santé financière, la structure des marges et des coûts de {clean_display_name}.
                 2. **Biais Macroéconomique (Taux, Inflation, Emploi)** : Impact des politiques monétaires et des flux globaux sur l'actif.
                 3. **Auction Market Theory (AMT)** : Définition de la Value Area, acceptation/rejet des prix, et zone de déséquilibre.
                 4. **Analyse Technique Avancée** : Lecture croisée MM (50/100/200), MACD, RSI, Bollinger et Pivots Fibonacci.
