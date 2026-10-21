@@ -119,8 +119,7 @@ def generate_ai_report(prompt_text, data_context=None):
         tp1_val = r1 if "LONG" in bias else s1
         tp2_val = r2 if "LONG" in bias else s2
 
-        report = f"""
-*(Rapport généré par le Moteur Quantitatif Algorithmique)*
+        report = f"""*(Rapport généré par le Moteur Quantitatif Algorithmique)*
 
 ### 1. 📰 ANALYSE FONDAMENTALE DE L'ACTIF
 - **Santé Globale :** Traitement de l'actif en temps réel. La structure micro/macro-économique globale est analysée via le flux de volatilité ATR et la tendance de fond Daily.
@@ -147,8 +146,7 @@ def generate_ai_report(prompt_text, data_context=None):
 - **Stop Loss (SL) :** {sl_val:.2f} (Invalidation technique basée sur 1.5x ATR).
 - **Take Profit 1 (TP1) :** {tp1_val:.2f}
 - **Take Profit 2 (TP2) :** {tp2_val:.2f}
-- **GESTION DU BREAK-EVEN (BE) :** Déplacez le Stop Loss au point d'entrée dès que le prix atteint **{be_val:.2f}** pour annuler le risque de la position.
-"""
+- **GESTION DU BREAK-EVEN (BE) :** Déplacez le Stop Loss au point d'entrée dès que le prix atteint **{be_val:.2f}** pour annuler le risque de la position."""
         return report
 
     return "### ⚠️ Rapport indisponible."
@@ -478,4 +476,162 @@ if st.session_state.active_tab == "new":
                 - Tendance Daily : {mtf_trend}
                 - Score Confluence : {confluence_score}%
                 - RSI (14) : {rsi_val:.2f} | ATR : {atr_val:.2f} | MM 50 : {mm50:.2f}
-                - PIVOTS FIBONACCI : R2={r2:.2f}, R1={r1:.2f}, Pivot={pivot:.2f}, S1={s1:.2f}, S2={s2:.
+                - PIVOTS FIBONACCI : R2={r2:.2f}, R1={r1:.2f}, Pivot={pivot:.2f}, S1={s1:.2f}, S2={s2:.2f}
+
+                ### ACTUALITÉS :
+                {news_text}
+                """
+
+                data_ctx = {
+                    "price": current_price,
+                    "pivot": pivot, "r1": r1, "r2": r2, "s1": s1, "s2": s2,
+                    "mtf_trend": mtf_trend,
+                    "rsi": rsi_val,
+                    "atr": atr_val,
+                    "confluence": confluence_score
+                }
+
+                with st.spinner("Génération du rapport institutionnel..."):
+                    ai_text = generate_ai_report(prompt, data_context=data_ctx)
+
+                timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+                
+                st.session_state.current_analysis = {
+                    "timestamp": timestamp_str,
+                    "asset": selected_asset_name,
+                    "ticker": ticker_symbol,
+                    "tf": selected_timeframe,
+                    "price": current_price,
+                    "mtf_trend": mtf_trend,
+                    "confluence": confluence_score,
+                    "report": ai_text,
+                    "df": df,
+                    "pivot": pivot,
+                    "r1": r1, "r2": r2, "s1": s1, "s2": s2,
+                    "news": recent_news_list,
+                    "zoom_36h": zoom_36h_option,
+                    "executed": False,
+                    "result": "En cours / Indéterminé"
+                }
+
+    if st.session_state.current_analysis is not None:
+        ca = st.session_state.current_analysis
+        st.markdown("---")
+        st.markdown(f"## 📊 Rapport Institutionnel : {ca['asset']} ({ca['tf']}) — {ca['timestamp']}")
+        
+        m1, m2, m3 = st.columns(3)
+        with m1: st.metric("Tendance Daily (MTF)", ca['mtf_trend'])
+        with m2: st.metric("Score de Confluence", f"{ca['confluence']}%")
+        with m3: st.metric("Prix de Référence", f"{ca['price']:.2f}")
+
+        fig_interactive = draw_interactive_chart(ca['df'], ca['pivot'], ca['r1'], ca['r2'], ca['s1'], ca['s2'], ca['asset'], ca['tf'], zoom_36h=ca['zoom_36h'])
+        st.plotly_chart(fig_interactive, use_container_width=True)
+
+        st.markdown("---")
+        with st.expander("📰 Voir le flux d'actualités et filtre macro", expanded=False):
+            for headline in ca['news']:
+                st.write(headline)
+
+        st.markdown("---")
+        st.markdown("### 📋 Synthèse et Plan Stratégique")
+        st.markdown(ca['report'])
+
+        st.markdown("---")
+        col_save1, col_save2 = st.columns([1, 2])
+        with col_save1:
+            if st.button("💾 Enregistrer dans l'historique", type="primary", use_container_width=True):
+                new_id = (max([item['id'] for item in st.session_state.trade_history]) + 1) if st.session_state.trade_history else 1
+                ca_to_save = ca.copy()
+                ca_to_save['id'] = new_id
+                
+                df_temp = ca_to_save.pop('df', None)
+                st.session_state.trade_history.append(ca_to_save)
+                
+                try:
+                    with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+                        json.dump(st.session_state.trade_history, f, ensure_ascii=False, indent=4)
+                except Exception:
+                    pass
+                
+                ca_to_save['df'] = df_temp
+                
+                st.session_state.active_tab = new_id
+                st.session_state.current_analysis = None
+                st.success("Analyse enregistrée avec succès !")
+                st.rerun()
+        with col_save2:
+            st.info("💡 Cliquez pour archiver l'analyse, suivre votre position et échanger avec le module IA.")
+
+else:
+    entry = next((item for item in st.session_state.trade_history if item['id'] == st.session_state.active_tab), None)
+    
+    if entry:
+        if st.button("⬅️ Effectuer une nouvelle analyse"):
+            st.session_state.active_tab = "new"
+            st.session_state.current_analysis = None
+            st.rerun()
+
+        st.markdown(f"## 📜 Archive : {entry['asset']} ({entry['tf']}) — {entry['timestamp']}")
+        
+        if 'df' not in entry or entry['df'] is None or isinstance(entry['df'], list):
+            tf_info = TIMEFRAME_MAPPING.get(entry['tf'], {"interval": "1d", "period": "1y"})
+            entry['df'] = load_market_data(entry['ticker'], tf_info["period"], tf_info["interval"])
+
+        m1, m2, m3 = st.columns(3)
+        with m1: st.metric("Tendance Daily", entry['mtf_trend'])
+        with m2: st.metric("Score Confluence", f"{entry['confluence']}%")
+        with m3: st.metric("Prix de référence", f"{entry['price']:.2f}")
+
+        fig_interactive = draw_interactive_chart(entry['df'], entry['pivot'], entry['r1'], entry['r2'], entry['s1'], entry['s2'], entry['asset'], entry['tf'], zoom_36h=entry['zoom_36h'])
+        st.plotly_chart(fig_interactive, use_container_width=True)
+
+        st.markdown("---")
+        st.markdown("### 📊 Rapport d'Analyse")
+        st.markdown(entry['report'])
+
+        st.markdown("---")
+        st.markdown("### 📋 Suivi de la Position")
+        col_a, col_b = st.columns(2)
+        with col_a:
+            trade_executed = st.radio("Trade réalisé ?", ["Non", "Oui"], index=1 if entry['executed'] else 0, key=f"exec_{entry['id']}")
+            entry['executed'] = (trade_executed == "Oui")
+        with col_b:
+            if entry['executed']:
+                result_options = ["En cours / Indéterminé", "Gagnant 🟢", "Perdant 🔴"]
+                current_res_idx = result_options.index(entry['result']) if entry['result'] in result_options else 0
+                entry['result'] = st.radio("Résultat :", result_options, index=current_res_idx, key=f"res_{entry['id']}")
+            else:
+                entry['result'] = "N/A"
+                st.info("Cochez 'Oui' pour consigner le résultat du trade.")
+
+        try:
+            with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+                json.dump(st.session_state.trade_history, f, ensure_ascii=False, indent=4)
+        except Exception:
+            pass
+
+        st.markdown("---")
+        st.markdown("### 💬 Assistant Trading IA (Chat)")
+        chat_key = f"chat_history_unique_{entry['id']}_{entry['ticker']}"
+        if chat_key not in st.session_state:
+            st.session_state[chat_key] = []
+
+        for message in st.session_state[chat_key]:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+
+        if user_query := st.chat_input("Ex: À quel niveau dois-je déplacer mon SL en BE ?", key=f"chat_input_{entry['id']}"):
+            st.session_state[chat_key].append({"role": "user", "content": user_query})
+            with st.chat_message("user"): st.markdown(user_query)
+
+            with st.chat_message("assistant"):
+                with st.spinner("Analyse de la question..."):
+                    history = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state[chat_key][:-1]])
+                    prompt_chat = f"Contexte actif {entry['asset']} ({entry['ticker']}). Rapport: {entry['report']}\nHist: {history}\nQuestion: {user_query}"
+                    reply = generate_ai_report(prompt_chat)
+                    st.markdown(reply)
+                    st.session_state[chat_key].append({"role": "assistant", "content": reply})
+    else:
+        st.session_state.active_tab = "new"
+        st.session_state.current_analysis = None
+        st.rerun()
