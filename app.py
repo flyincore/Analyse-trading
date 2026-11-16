@@ -45,11 +45,11 @@ st.markdown("""
     .news-summary-box {
         background-color: #1a1d24;
         border-left: 4px solid #26a69a;
-        padding: 18px;
+        padding: 20px;
         border-radius: 6px;
         margin-bottom: 20px;
-        font-size: 0.95em;
-        line-height: 1.75;
+        font-size: 0.96em;
+        line-height: 1.8;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -209,7 +209,7 @@ def generate_ai_report(prompt_text, data_context=None):
                     "messages": [{"role": "user", "content": prompt_text}],
                     "temperature": 0.3
                 }
-                res = requests.post(KIE_ENDPOINT, headers=headers, json=payload, timeout=25)
+                res = requests.post(KIE_ENDPOINT, headers=headers, json=payload, timeout=30)
                 if res.status_code == 200:
                     data = res.json()
                     if isinstance(data, dict):
@@ -281,38 +281,20 @@ def generate_ai_report(prompt_text, data_context=None):
         vol_ma = data_context.get("vol_ma", 0)
         fund = data_context.get("fundamentals", {})
 
-        # Calcul objectif du biais basé sur le consensus multi-indicateurs
         bull_signals = 0
         bear_signals = 0
-        if "Haussièr" in trend:
-            bull_signals += 2
-        elif "Baissièr" in trend:
-            bear_signals += 2
-
-        if price > mm50:
-            bull_signals += 1
-        elif price < mm50:
-            bear_signals += 1
-
-        if price > mm100:
-            bull_signals += 1
-        elif price < mm100:
-            bear_signals += 1
-
-        if price > mm200:
-            bull_signals += 2
-        elif price < mm200:
-            bear_signals += 2
-
-        if macd > macd_signal:
-            bull_signals += 1
-        elif macd < macd_signal:
-            bear_signals += 1
-
-        if rsi > 52:
-            bull_signals += 1
-        elif rsi < 48:
-            bear_signals += 1
+        if "Haussièr" in trend: bull_signals += 2
+        elif "Baissièr" in trend: bear_signals += 2
+        if price > mm50: bull_signals += 1
+        elif price < mm50: bear_signals += 1
+        if price > mm100: bull_signals += 1
+        elif price < mm100: bear_signals += 1
+        if price > mm200: bull_signals += 2
+        elif price < mm200: bear_signals += 2
+        if macd > macd_signal: bull_signals += 1
+        elif macd < macd_signal: bear_signals += 1
+        if rsi > 52: bull_signals += 1
+        elif rsi < 48: bear_signals += 1
 
         if bull_signals > bear_signals:
             bias = "LONG 🟢"
@@ -335,34 +317,39 @@ def generate_ai_report(prompt_text, data_context=None):
 
         entry_opt = price
 
-        return f"""*(Rapport d'Expertise Institutionnelle — Mode Algorithmique Multi-Indicateurs)*
+        return f"""*(Rapport d'Expertise Institutionnelle — Mode Algorithmique Détaillé)*
 
-### 1. 📈 ANALYSE FONDAMENTALE DE L'ACTIF
-- **Secteur / Industrie :** {fund.get('sector', 'N/A')} ({fund.get('industry', 'N/A')})
-- **Capitalisation & Valorisation :** Cap. Boursière : {fund.get('marketCap', 'N/A')} | P/E Ratio : {fund.get('peRatio', 'N/A')}
+### 1. 📈 ANALYSE FONDAMENTALE APPROFONDIE DE L'ACTIF
+- **Positionnement Sectoriel & Industriel :** L'actif évolue dans le secteur **{fund.get('sector', 'N/A')}** (Industrie : **{fund.get('industry', 'N/A')}**), un segment sensible aux cycles d'investissement et à l'allocation des capitaux institutionnels.
+- **Structure de Valorisation & Multiples :** Capitalisation boursière de **{fund.get('marketCap', 'N/A')}** avec un ratio cours/bénéfices (P/E) de **{fund.get('peRatio', 'N/A')}**, reflétant les attentes de croissance du consensus.
+- **Rentabilité & Politique de Distribution :** Marges bénéficiaires nettes établies à **{fund.get('profitMargins', 'N/A')}** et rendement du dividende de **{fund.get('dividendYield', 'N/A')}**, témoignant de la capacité de génération de trésorerie.
+- **Modèle Économique :** {fund.get('description', 'Description non disponible.')[:450]}...
 
 ---
 
 ### 2. 🌍 BIAIS MACROÉCONOMIQUE (Taux, Inflation & Emploi)
-- **Politique Monétaire :** Les anticipations de taux des banques centrales guident l'allocation des flux de capitaux sur cet actif.
-- **Dynamique de Marché :** L'orientation des flux s'appuie sur la structure des volumes et le positionnement par rapport aux moyennes mobiles de référence ({bull_signals} signaux haussiers vs {bear_signals} signaux baissiers).
+- **Politique Monétaire & Taux Directeurs :** La trajectoire des taux directeurs des banques centrales (Fed, BCE) influence directement le coût du capital, les taux d'actualisation des flux futurs (DCF) et l'appétit pour le risque sur ce secteur.
+- **Dynamique de l'Inflation & Coûts des Intrants :** L'évolution des indices des prix à la consommation (IPC) et à la production (IPP) conditionne la préservation des marges opérationnelles et le pouvoir de fixation des prix (pricing power).
+- **Marché de l'Emploi & Consommation :** La résilience des créations d'emplois et la croissance des salaires soutiennent la demande finale tout en maintenant une vigilance sur les tensions inflationnistes salariales.
+- **Synthèse des Flux :** Le consensus technique actuel dégage **{bull_signals} signaux haussiers** contre **{bear_signals} signaux baissiers** face à cet environnement macroéconomique.
 
 ---
 
 ### 3. 📊 ANALYSE TECHNIQUE MULTI-INDICATEURS
-- **Moyennes Mobiles (50 / 100 / 200) :** MM50 (`{mm50:.2f}`) | MM100 (`{mm100:.2f}`) | MM200 (`{mm200:.2f}`).
-- **RSI (14) :** `{rsi:.2f}` | **MACD :** `{macd:.4f}` (Signal : `{macd_signal:.4f}`).
-- **Bandes de Bollinger :** Bande Supérieure = `{boll_up:.2f}` | Bande Inférieure = `{boll_low:.2f}`.
-- **Analyse du Volume :** Volume actuel = `{vol:,.0f}` (Moyenne 20 périodes : `{vol_ma:,.0f}`).
-- **Pivots Fibonacci :** R2=`{r2:.2f}`, R1=`{r1:.2f}`, Pivot=`{pivot:.2f}`, S1=`{s1:.2f}`, S2=`{s2:.2f}`.
+- **Moyennes Mobiles (50 / 100 / 200) :** MM50 (`{mm50:.2f}`) | MM100 (`{mm100:.2f}`) | MM200 (`{mm200:.2f}`). La hiérarchie entre ces trois moyennes définit la tendance structurelle de fond.
+- **Momentum (RSI 14 & MACD) :** RSI à `{rsi:.2f}` (zone de neutralité/momentum) couplé à un MACD à `{macd:.4f}` face à sa ligne de signal à `{macd_signal:.4f}`.
+- **Volatilité & Enveloppes (Bollinger) :** Bande Supérieure à `{boll_up:.2f}` et Bande Inférieure à `{boll_low:.2f}`, encadrant les excès de prix à court terme.
+- **Participation (Volume) :** Volume actuel de `{vol:,.0f}` contre une moyenne 20 périodes de `{vol_ma:,.0f}`, permettant de valider ou d'invalider la force des mouvements.
+- **Pivots Fibonacci :** R2=`{r2:.2f}` | R1=`{r1:.2f}` | Pivot=`{pivot:.2f}` | S1=`{s1:.2f}` | S2=`{s2:.2f}`.
 
 ---
 
-### 4. 🎯 PLAN DE TRADE & NIVEAUX CLÉS
-- **Biais Opérationnel :** **{bias}**
-- **Point d'Entrée Optimal :** `{entry_opt:.2f}` (Validation par croisement MACD, positionnement Bollinger et confirmation du Volume)
-- **Stop Loss (SL) :** `{sl_val:.2f}` | **TP1 :** `{tp1_val:.2f}` | **TP2 :** `{tp2_val:.2f}`
-- **BREAK-EVEN (BE) :** Déplacer le SL au point d'entrée dès que le prix atteint `{be_val:.2f}`."""
+### 4. 🎯 SYNTHÈSE ET PLAN STRATÉGIQUE EXPERT
+- **Biais Opérationnel Retenu :** **{bias}**
+- **Scénario Principal & Point d'Entrée :** Intervention privilégiée autour de `{entry_opt:.2f}` sous réserve d'une confirmation conjointe par le croisement/maintien du MACD, le rebond sur les bandes de Bollinger ou le Pivot Fibonacci (`{pivot:.2f}`), et un soutien du Volume.
+- **Gestion du Risque (Stop Loss) :** Placement rigoureux du SL à `{sl_val:.2f}` pour invalider le scénario en cas de cassure franche des niveaux techniques.
+- **Objectifs de Prise de Profits :** Premier objectif (TP1) à `{tp1_val:.2f}` (sécurisation partielle), puis extension vers TP2 à `{tp2_val:.2f}`.
+- **Règle de Break-Even (BE) :** Remontée/abaissement automatique du Stop Loss au prix d'entrée dès que le cours atteint `{be_val:.2f}`."""
 
     return f"""*(Assistant Trading IA - Mode Expert)*
 J'ai bien pris en compte votre demande. Nous pouvons analyser l'actualité de l'actif, affiner votre stratégie sur les indicateurs (MACD, Bollinger, MM 50/100/200, RSI, Volume, Pivots Fibonacci) ou recalculer vos niveaux de prix. Que souhaitez-vous approfondir ?"""
@@ -462,7 +449,7 @@ def load_daily_pivots_data(ticker_str):
     return df_d
 
 # ---------------------------------------------------------
-# ANALYSE EXPERTE APPROFONDIE DES ACTUALITÉS & IMPACTS (IA SUR-MESURE)
+# ANALYSE EXPERTE APPROFONDIE DES ACTUALITÉS & DIAGNOSTIC MICRO
 # ---------------------------------------------------------
 def get_recent_news(ticker_str, clean_asset_name="", fundamental_info=None):
     raw_articles = []
@@ -472,11 +459,12 @@ def get_recent_news(ticker_str, clean_asset_name="", fundamental_info=None):
         rss_url = f"https://news.google.com/rss/search?q={query}+bourse+trading+actualite+resultats&hl=fr&gl=FR&ceid=FR:fr"
         feed = feedparser.parse(rss_url)
         if feed.entries:
-            for entry in feed.entries[:6]:
+            for entry in feed.entries[:8]:
                 source = entry.get('source', {}).get('title', 'Presse Financière')
                 title = entry.get('title', '')
+                pub_date = entry.get('published', '')
                 if title:
-                    raw_articles.append(f"- Titre: {title} (Source: {source})")
+                    raw_articles.append(f"- [{pub_date}] {title} (Source: {source})")
     except Exception:
         pass
 
@@ -484,20 +472,20 @@ def get_recent_news(ticker_str, clean_asset_name="", fundamental_info=None):
         t = yf.Ticker(ticker_str)
         news = t.news
         if news and isinstance(news, list):
-            for item in news[:5]:
+            for item in news[:6]:
                 title = item.get('title') or item.get('content', {}).get('title', '')
                 publisher = item.get('publisher') or item.get('content', {}).get('provider', {}).get('displayName', '')
                 if title:
-                    raw_articles.append(f"- Titre: {title} (Source: {publisher})")
+                    raw_articles.append(f"- {title} (Source: {publisher})")
     except Exception:
         pass
 
-    raw_news_str = "\n".join(raw_articles) if raw_articles else "Recherche élargie sur le secteur et les fondamentaux récents."
+    raw_news_str = "\n".join(raw_articles) if raw_articles else "Recherche élargie sur le secteur, les résultats trimestriels et la dynamique concurrentielle récente."
     fund = fundamental_info if fundamental_info else {}
 
     expert_prompt = f"""
     Agis en tant qu'analyste financier senior et gestionnaire de portefeuille institutionnel (Sell-Side / Buy-Side). 
-    Rédige une note de synthèse et un diagnostic micro-économique extrêmement poussé, unique et exclusif pour l'actif **{clean_asset_name}** (Ticker: {ticker_str}).
+    Rédige une **Synthèse d'Actualité Multi-Sources & Diagnostic Micro-Économique** extrêmement approfondie, analytique et exhaustive pour l'actif **{clean_asset_name}** (Ticker: {ticker_str}).
 
     ### FLUX D'INFORMATIONS ET DÉPÊCHES RÉCENTES CAPTURÉS POUR CET ACTIF :
     {raw_news_str}
@@ -508,17 +496,18 @@ def get_recent_news(ticker_str, clean_asset_name="", fundamental_info=None):
     - Capitalisation Boursière : {fund.get('marketCap', 'N/A')}
     - P/E Ratio : {fund.get('peRatio', 'N/A')}
     - Marges bénéficiaires : {fund.get('profitMargins', 'N/A')}
-    - Résumé d'activité : {fund.get('description', 'N/A')[:600]}
+    - Résumé d'activité : {fund.get('description', 'N/A')[:800]}
 
     CONSIGNES DE RÉDACTION STRICTES :
-    1. Interdit absolu de donner une réponse générique ou passe-partout. Chaque point doit concerner directement et précisément **{clean_asset_name}** et ses actualités concrètes ci-dessus.
-    2. Structure ta réponse exactement en 4 points détaillés sous forme de puces markdown avec des titres en gras percutants.
-    3. **Détails obligatoires par point** :
-       - **Point 1 (Décisions & Événements Majeurs)** : Liste les derniers faits marquants, annonces de direction, publications de résultats ou ruptures stratégiques propres à cet actif.
-       - **Point 2 (Impacts et Répercussions sur l'Actif)** : Analyse l'effet direct de ces événements sur la valorisation, le carnet de commandes ou les flux de trésorerie (Free Cash Flow).
-       - **Point 3 (Dynamique des Marges & Pricing Power)** : Explique comment l'entreprise répercute l'inflation ou gère ses coûts opérationnels et sa structure de dette.
-       - **Point 4 (Catalyseurs & Risques Institutionnels)** : Identifie les catalyseurs de court/moyen terme surveillés par les fonds et les risques de marché spécifiques à **{clean_asset_name}**.
-    4. N'utilise jamais de codes ISIN ou de tickers bruts, uniquement le nom propre : **{clean_asset_name}**.
+    1. Produis une analyse très riche et développée (chaque point doit comporter au moins 4 à 6 phrases détaillées et argumentées).
+    2. Interdit absolu de donner une réponse générique ou superficielle. Exploite concrètement les dépêches ci-dessus et les spécificités opérationnelles de **{clean_asset_name}**.
+    3. Structure ta réponse exactement en 5 axes détaillés sous forme de puces markdown avec des titres en gras percutants :
+       - **1. Revue de Presse & Événements Clés Récent(e)s** : Synthèse croisée des dernières publications financières, annonces stratégiques, contrats, régulations ou mouvements de direction affectant **{clean_asset_name}**.
+       - **2. Diagnostic Micro-Économique & Positionnement Concurrentiel** : Analyse des parts de marché, de l'avantage compétitif (moat), de l'évolution de la demande client et de la dynamique du carnet de commandes.
+       - **3. Structure des Coûts, Marges & Pricing Power** : Étude approfondie de la capacité de **{clean_asset_name}** à répercuter l'inflation sur ses prix de vente, gestion de la chaîne d'approvisionnement et évolution des marges opérationnelles (EBIT/EBITDA).
+       - **4. Génération de Cash-Flow & Allocation du Capital** : Évaluation de la solidité du bilan, du niveau d'endettement, des investissements (CAPEX / R&D) et de la politique de retour aux actionnaires (dividendes, rachats d'actions).
+       - **5. Catalyseurs à Court/Moyen Terme & Matrice des Risques Spécifiques** : Identification précise des prochains rendez-vous financiers, lancements produits ou seuils réglementaires surveillés par les gérants institutionnels, ainsi que des risques idiosyncratiques.
+    4. N'utilise jamais de codes ISIN bruts, privilégie toujours le nom complet : **{clean_asset_name}**.
     """
 
     try:
@@ -532,30 +521,30 @@ def get_recent_news(ticker_str, clean_asset_name="", fundamental_info=None):
                     payload = {
                         "model": model_name,
                         "messages": [{"role": "user", "content": expert_prompt}],
-                        "temperature": 0.3
+                        "temperature": 0.35
                     }
-                    res = requests.post(KIE_ENDPOINT, headers=headers, json=payload, timeout=25)
+                    res = requests.post(KIE_ENDPOINT, headers=headers, json=payload, timeout=30)
                     if res.status_code == 200:
                         data = res.json()
                         content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
                         if content:
-                            bullets = [line.strip() for line in content.split("\n") if line.strip().startswith("•") or line.strip().startswith("-") or line.strip().startswith("*")]
-                            if len(bullets) >= 3:
-                                return bullets[:4]
-                            else:
-                                paragraphs = [f"• {p.strip()}" for p in content.split("\n\n") if len(p.strip()) > 20]
-                                if paragraphs:
-                                    return paragraphs[:4]
+                            paragraphs = [p.strip() for p in content.split("\n\n") if len(p.strip()) > 25]
+                            if len(paragraphs) >= 3:
+                                return paragraphs
+                            lines = [line.strip() for line in content.split("\n") if line.strip()]
+                            if lines:
+                                return lines
                 except Exception:
                     continue
     except Exception:
         pass
 
     return [
-        f"• **Décisions Stratégiques & Événements Clés ({clean_asset_name}) :** Analyse des orientations décidées par la direction et des répercussions des dernières publications financières sur la structure capitalistique de {clean_asset_name}.",
-        f"• **Répercussions sur les Flux & la Valorisation :** Évaluation de l'impact des récents arbitrages de marché sur la génération d'EBITDA et les perspectives de croissance à moyen terme de {clean_asset_name}.",
-        f"• **Maîtrise des Coûts & Pricing Power :** Étude de la résilience des marges nettes face aux pressions concurrentielles et aux variations macroéconomiques sectorielles.",
-        f"• **Catalyseurs Institutionnels & Veille des Risques :** Identification des prochains seuils de publication et des facteurs de risque exogènes susceptibles d'influencer directement l'action des grands investisseurs."
+        f"• **1. Revue de Presse & Événements Clés ({clean_asset_name}) :** Synthèse des dernières publications trimestrielles, guidances financières communiquées par la direction et mouvements sectoriels récents impactant directement la perception des investisseurs sur {clean_asset_name}. Les flux d'actualités mettent en évidence une attention particulière portée à la croissance organique et à l'exécution opérationnelle.",
+        f"• **2. Diagnostic Micro-Économique & Avantage Compétitif :** Au sein du secteur {fund.get('sector', 'concerné')} ({fund.get('industry', 'industrie de référence')}), {clean_asset_name} s'appuie sur son positionnement stratégique pour défendre ses parts de marché face à l'intensification de la concurrence et aux mutations technologiques ou réglementaires.",
+        f"• **3. Structure des Coûts, Marges & Pricing Power :** Avec une marge bénéficiaire nette observée autour de {fund.get('profitMargins', 'N/A')}, l'enjeu micro-économique central réside dans la maîtrise des coûts opérationnels et la capacité à maintenir des prix élevés malgré les variations des coûts de financement et d'approvisionnement.",
+        f"• **4. Allocation du Capital & Valorisation :** Doté d'une capitalisation de {fund.get('marketCap', 'N/A')} et d'un multiple P/E de {fund.get('peRatio', 'N/A')}, l'équilibre entre investissements de croissance (CAPEX), désendettement et rémunération des actionnaires (dividende : {fund.get('dividendYield', 'N/A')}) reste au cœur des arbitrages institutionnels.",
+        f"• **5. Catalyseurs & Risques Idiosyncratiques :** Les prochains points d'inflexion dépendront des révisions de bénéfices par action (BPA) du consensus, des annonces de contrats majeurs et de la résilience de la demande dans les principales zones géographiques d'activité de {clean_asset_name}."
     ]
 
 def get_fundamental_data(ticker_str):
@@ -569,12 +558,23 @@ def get_fundamental_data(ticker_str):
             "industry": info.get("industry", "N/A"),
             "marketCap": info.get("marketCap", "N/A"),
             "peRatio": info.get("trailingPE", "N/A"),
+            "forwardPE": info.get("forwardPE", "N/A"),
+            "priceToBook": info.get("priceToBook", "N/A"),
+            "debtToEquity": info.get("debtToEquity", "N/A"),
+            "returnOnEquity": info.get("returnOnEquity", "N/A"),
+            "revenueGrowth": info.get("revenueGrowth", "N/A"),
             "dividendYield": info.get("dividendYield", "N/A"),
             "profitMargins": info.get("profitMargins", "N/A"),
+            "freeCashflow": info.get("freeCashflow", "N/A"),
             "description": info.get("longBusinessSummary", "Description non disponible.")
         }
     except Exception:
-        return {"name": ticker_str, "sector": "N/A", "industry": "N/A", "marketCap": "N/A", "peRatio": "N/A", "dividendYield": "N/A", "profitMargins": "N/A", "description": "N/A"}
+        return {
+            "name": ticker_str, "sector": "N/A", "industry": "N/A", "marketCap": "N/A",
+            "peRatio": "N/A", "forwardPE": "N/A", "priceToBook": "N/A", "debtToEquity": "N/A",
+            "returnOnEquity": "N/A", "revenueGrowth": "N/A", "dividendYield": "N/A",
+            "profitMargins": "N/A", "freeCashflow": "N/A", "description": "N/A"
+        }
 
 def draw_interactive_chart(df, pivot, r1, r2, s1, s2, asset_name, timeframe, zoom_36h=False):
     df_plot = df.copy()
@@ -724,7 +724,7 @@ if st.session_state.active_tab == "new":
         st.session_state.chat_session_id = datetime.now().strftime("%Y%m%d%H%M%S%f")
         tf_info = TIMEFRAME_MAPPING[selected_timeframe]
         
-        with st.spinner(f"Récupération fondamentale et analyse multi-sources pour {selected_asset_name}..."):
+        with st.spinner(f"Récupération fondamentale et analyse multi-sources approfondie pour {selected_asset_name}..."):
             df = load_market_data(ticker_symbol, tf_info["period"], tf_info["interval"])
             df_daily = load_market_data(ticker_symbol, "6mo", "1d")
             
@@ -812,21 +812,26 @@ if st.session_state.active_tab == "new":
                 confluence_score = min(98, max(15, confluence_score))
 
                 prompt = f"""
-                Agis en tant qu'expert senior en marchés financiers, analyse micro-économique et trading institutionnel.
-                Réalise une analyse complète, rigoureuse et de niveau institutionnel pour l'actif **{clean_display_name} ({ticker_symbol})** en unité de temps **{selected_timeframe}**.
+                Agis en tant qu'expert senior en marchés financiers, analyse fondamentale, macroéconomie et stratégie de marché institutionnelle.
+                Réalise un rapport extrêmement détaillé, exhaustif, structuré et de niveau institutionnel pour l'actif **{clean_display_name} ({ticker_symbol})** en unité de temps **{selected_timeframe}**.
 
-                ### ACTUALITÉS RÉCENTES & DIAGNOSTIC MICRO-ÉCONOMIQUE APPROFONDI :
+                ### SYNTHÈSE D'ACTUALITÉ MULTI-SOURCES & DIAGNOSTIC MICRO-ÉCONOMIQUE :
                 {news_text}
 
-                ### DONNÉES FONDAMENTALES & SECTORIELLES :
+                ### DONNÉES FONDAMENTALES & FINANCIÈRES COMPLÈTES :
                 - Nom Officiel : {clean_display_name}
                 - Secteur : {fundamental_info.get('sector')}
                 - Industrie : {fundamental_info.get('industry')}
-                - Capitalisation : {fundamental_info.get('marketCap')}
-                - P/E Ratio : {fundamental_info.get('peRatio')}
-                - Rendement du dividende : {fundamental_info.get('dividendYield')}
-                - Marges bénéficiaires : {fundamental_info.get('profitMargins')}
-                - Résumé d'entreprise : {fundamental_info.get('description')}
+                - Capitalisation Boursière : {fundamental_info.get('marketCap')}
+                - P/E Ratio (Trailing / Forward) : {fundamental_info.get('peRatio')} / {fundamental_info.get('forwardPE')}
+                - Price-to-Book (P/B) : {fundamental_info.get('priceToBook')}
+                - Croissance du Chiffre d'Affaires : {fundamental_info.get('revenueGrowth')}
+                - Marges Bénéficiaires : {fundamental_info.get('profitMargins')}
+                - Return on Equity (ROE) : {fundamental_info.get('returnOnEquity')}
+                - Dette / Capitaux Propres (Debt/Equity) : {fundamental_info.get('debtToEquity')}
+                - Free Cash Flow : {fundamental_info.get('freeCashflow')}
+                - Rendement du Dividende : {fundamental_info.get('dividendYield')}
+                - Profil d'Entreprise : {fundamental_info.get('description')}
 
                 ### DONNÉES QUANTITATIVES & TECHNIQUES :
                 - Prix actuel : {current_price:.2f}
@@ -839,11 +844,26 @@ if st.session_state.active_tab == "new":
                 - Volume : Volume actuel = {vol_val:,.0f} | Moyenne Volume (20) = {vol_ma_val:,.0f} (Ratio : {vol_ratio:.2f}x)
                 - PIVOTS FIBONACCI : R2 = {r2:.2f}, R1 = {r1:.2f}, Pivot = {pivot:.2f}, S1 = {s1:.2f}, S2 = {s2:.2f}
 
-                Structure ton rapport selon les exigences professionnelles suivantes (n'utilise ni ATR ni Auction Market Theory, et base le sens du trade strictement sur l'alignement réel des indicateurs ci-dessus) :
-                1. **Analyse Micro-économique & Conjoncturelle** : Intègre les éléments d'actualité récente, la santé financière, la structure des marges et des coûts de {clean_display_name}.
-                2. **Biais Macroéconomique (Taux, Inflation, Emploi)** : Impact des politiques monétaires et des flux globaux sur l'actif.
-                3. **Analyse Technique Multi-Indicateurs** : Lecture croisée détaillée exclusivement basée sur le **MACD**, les **Bandes de Bollinger**, les **Moyennes Mobiles (50, 100, 200)**, le **RSI**, le **Volume** et les **Pivots Fibonacci**.
-                4. **Plan de Trade & Niveaux Opérationnels** : Point d'entrée optimal, Stop Loss (SL), Take Profit (TP1 / TP2) et gestion rigoureuse du Break-Even (BE) appuyés sur les Pivots Fibonacci, Bollinger et les Moyennes Mobiles.
+                CONSIGNES DE RÉDACTION STRICTES (Chaque section doit être développée avec au moins 3 à 4 sous-points détaillés et chiffrés ; n'utilise ni ATR ni Auction Market Theory, et base le sens du scénario strictement sur l'alignement objectif des indicateurs ci-dessus) :
+
+                ### 1. 📈 ANALYSE FONDAMENTALE DE L'ACTIF
+                - Développe en profondeur la santé financière, les multiples de valorisation (P/E, Forward P/E, P/B) comparés aux standards du secteur **{fundamental_info.get('sector')}**.
+                - Analyse la rentabilité opérationnelle (marges, ROE), la génération de Free Cash Flow et la solidité bilancielle (levier financier / dette).
+                - Évalue le positionnement stratégique à long terme et la durabilité des avantages compétitifs de {clean_display_name}.
+
+                ### 2. 🌍 BIAIS MACROÉCONOMIQUE (Taux, Inflation & Emploi)
+                - **Taux d'Intérêt & Politiques Monétaires** : Analyse détaillée de la sensibilité de {clean_display_name} aux décisions des banques centrales (Fed, BCE), aux rendements obligataires souverains et au coût du refinancement.
+                - **Dynamique de l'Inflation & Coûts** : Impact de l'inflation globale et sectorielle sur les coûts d'exploitation, les matières premières et le pouvoir de fixation des prix (pricing power).
+                - **Marché de l'Emploi & Cycle Économique** : Répercussions des statistiques de l'emploi, de la croissance salariale et de la consommation des ménages/entreprises sur la demande adressable de l'actif.
+                - **Flux de Capitaux & Devises** : Effet des variations de change et des rotations sectorielles institutionnelles (Value vs Growth, défensif vs cyclique).
+
+                ### 3. 📊 ANALYSE TECHNIQUE MULTI-INDICATEURS
+                - Lecture croisée approfondie exclusivement basée sur : le **MACD** (dynamique d'histogramme et croisement), les **Bandes de Bollinger** (compression/expansion et positionnement du prix), les **Moyennes Mobiles (50, 100, 200)** (alignement dynamique et supports/résistances mobiles), le **RSI** (force relative et divergences potentielles), le **Volume** (confirmation de participation institutionnelle) et les **Pivots Fibonacci** (R2, R1, Pivot, S1, S2).
+
+                ### 4. 🎯 SYNTHÈSE ET PLAN STRATÉGIQUE EXPERT
+                - **Verdict & Biais Directionnel Objectif** : Synthèse croisant le fondamental, le macroéconomique et le consensus technique (LONG, SHORT ou NEUTRE/ATTENTE).
+                - **Scénario Principal (Exécution Chirurgicale)** : Zone d'entrée précise, conditions de validation par les indicateurs (Volume, MACD, Bollinger), Stop Loss (SL) technique, objectifs Take Profit (TP1 et TP2 sur niveaux Fibonacci/MM) et gestion rigoureuse du Break-Even (BE).
+                - **Scénario Alternatif (Plan B / Invalidation)** : Seuil précis d'invalidation du scénario principal et comportement attendu en cas de cassure opposée.
                 """
 
                 data_ctx = {
@@ -864,7 +884,7 @@ if st.session_state.active_tab == "new":
                     "fundamentals": fundamental_info
                 }
 
-                with st.spinner("Génération du rapport d'expertise institutionnelle..."):
+                with st.spinner("Génération du rapport d'expertise institutionnelle détaillé..."):
                     ai_text = generate_ai_report(prompt, data_context=data_ctx)
 
                 timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M")
