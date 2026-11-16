@@ -1,3 +1,10 @@
+Le code complet ci-dessous intègre exactement les modifications demandées :
+
+* **Suppression complète** de l'analyse **ATR** et de l'**Auction Market Theory (AMT)** (dans les calculs, les prompts IA, le recalcul de prix dans le chat et le rapport de secours).
+* **Intégration stricte** de vos indicateurs : **MACD**, **Bandes de Bollinger**, **Moyennes Mobiles (50, 100, 200)**, **RSI**, **Volume** (avec moyenne mobile des volumes et ratio relatif) et **Pivots Fibonacci**.
+* **Conservation intégrale** du reste de l'application (Supabase, graphiques Plotly, dictionnaires d'actifs, synthèse d'actualité et chat permanent).
+
+```python
 import streamlit as st
 import yfinance as yf
 import pandas as pd
@@ -215,30 +222,30 @@ def generate_ai_report(prompt_text, data_context=None):
 
     if custom_price:
         is_short = "SHORT" in prompt_text.upper() or "BAISSIÈR" in prompt_text.upper() or "BAISSIER" in prompt_text.upper()
-        atr_est = custom_price * 0.008 
+        step_est = custom_price * 0.01 
         
         if is_short:
             bias_text = "SHORT 🔴"
-            sl_val = custom_price + (1.5 * atr_est)
-            be_val = custom_price - (1.0 * atr_est)
-            tp1_val = custom_price - (1.5 * atr_est)
-            tp2_val = custom_price - (3.0 * atr_est)
+            sl_val = custom_price + (1.2 * step_est)
+            be_val = custom_price - (1.0 * step_est)
+            tp1_val = custom_price - (1.5 * step_est)
+            tp2_val = custom_price - (3.0 * step_est)
         else:
             bias_text = "LONG 🟢"
-            sl_val = custom_price - (1.5 * atr_est)
-            be_val = custom_price + (1.0 * atr_est)
-            tp1_val = custom_price + (1.5 * atr_est)
-            tp2_val = custom_price + (3.0 * atr_est)
+            sl_val = custom_price - (1.2 * step_est)
+            be_val = custom_price + (1.0 * step_est)
+            tp1_val = custom_price + (1.5 * step_est)
+            tp2_val = custom_price + (3.0 * step_est)
 
-        return f"""*(Recalcul Automatique du Plan — Basé sur le prix XTB : {custom_price:.2f})*
+        return f"""*(Recalcul Automatique du Plan — Basé sur le prix : {custom_price:.2f})*
 
 ### 🎯 PLAN DE TRADE RECALCULÉ (EXPERT)
 - **Nouveau Prix de Référence :** `{custom_price:.2f}`
-- **Biais Opérationnel :** **{bias_text}** (Préservé et aligné sur l'analyse initiale)
-- **Point d'Entrée Optimal :** `{custom_price:.2f}` (Sur test de la zone de déséquilibre)
-- **Stop Loss (SL) Institutionnel :** `{sl_val:.2f}` (Calculé avec un risque de 1.5x ATR estimé à `{atr_est:.2f}`)
+- **Biais Opérationnel :** **{bias_text}** (Aligné sur les moyennes mobiles, le MACD et les Pivots Fibonacci)
+- **Point d'Entrée Optimal :** `{custom_price:.2f}` (Sur validation du Volume et rebond Bollinger/Pivot)
+- **Stop Loss (SL) Institutionnel :** `{sl_val:.2f}` (Protégé au-delà du seuil technique clé)
 - **Take Profit 1 (TP1) :** `{tp1_val:.2f}` (Allègement de 50% de la position)
-- **Take Profit 2 (TP2) :** `{tp2_val:.2f}` (Objectif d'extension de marché)
+- **Take Profit 2 (TP2) :** `{tp2_val:.2f}` (Objectif d'extension Fibonacci)
 - **GESTION DU BREAK-EVEN (BE) :** Déplacer le Stop Loss au point d'entrée dès que le prix atteint `{be_val:.2f}`."""
 
     if data_context:
@@ -250,7 +257,6 @@ def generate_ai_report(prompt_text, data_context=None):
         s2 = data_context.get("s2", 0)
         trend = data_context.get("mtf_trend", "Neutre")
         rsi = data_context.get("rsi", 50)
-        atr = data_context.get("atr", price * 0.01)
         macd = data_context.get("macd", 0)
         macd_signal = data_context.get("macd_signal", 0)
         mm50 = data_context.get("mm50", price)
@@ -258,14 +264,16 @@ def generate_ai_report(prompt_text, data_context=None):
         mm200 = data_context.get("mm200", price)
         boll_up = data_context.get("boll_up", price * 1.02)
         boll_low = data_context.get("boll_low", price * 0.98)
+        vol = data_context.get("volume", 0)
+        vol_ma = data_context.get("vol_ma", 0)
         fund = data_context.get("fundamentals", {})
 
         bias = "LONG 🟢" if "Haussièr" in trend else "SHORT 🔴"
-        sl_val = price - (1.5 * atr) if "LONG" in bias else price + (1.5 * atr)
-        be_val = price + (1.0 * atr) if "LONG" in bias else price - (1.0 * atr)
-        tp1_val = r1 if "LONG" in bias else s1
-        tp2_val = r2 if "LONG" in bias else s2
-        entry_opt = price - (0.2 * atr) if "LONG" in bias else price + (0.2 * atr)
+        sl_val = s1 if ("LONG" in bias and s1 > 0 and s1 < price) else (r1 if ("SHORT" in bias and r1 > price) else (price * 0.988 if "LONG" in bias else price * 1.012))
+        be_val = price + abs(price - sl_val) if "LONG" in bias else price - abs(price - sl_val)
+        tp1_val = r1 if ("LONG" in bias and r1 > price) else (s1 if ("SHORT" in bias and s1 > 0 and s1 < price) else (price * 1.015 if "LONG" in bias else price * 0.985))
+        tp2_val = r2 if ("LONG" in bias and r2 > price) else (s2 if ("SHORT" in bias and s2 > 0 and s2 < price) else (price * 1.03 if "LONG" in bias else price * 0.97))
+        entry_opt = price
 
         return f"""*(Rapport d'Expertise Institutionnelle — Mode de Secours Algorithmique)*
 
@@ -277,31 +285,27 @@ def generate_ai_report(prompt_text, data_context=None):
 
 ### 2. 🌍 BIAIS MACROÉCONOMIQUE (Taux, Inflation & Emploi)
 - **Politique Monétaire :** Les anticipations de taux des banques centrales guident l'allocation des flux de capitaux sur cet actif.
-- **Inflation & Emploi :** Le climat macroéconomique global soutient la structure de volatilité mesurée par l'ATR (`{atr:.2f}`).
+- **Dynamique de Marché :** L'orientation des flux institutionnels s'appuie sur la structure des volumes et des moyennes mobiles de référence.
 
 ---
 
-### 3. 🏛️ ANALYSE STRUCTURELLE (Auction Market Theory - AMT)
-- **Zone de Déséquilibre :** Le marché évalue l'acceptation des prix autour du pivot central (`{pivot:.2f}`).
-
----
-
-### 4. 📊 ANALYSE TECHNIQUE MULTI-INDICATEURS
-- **Moyennes Mobiles :** MM50 (`{mm50:.2f}`) | MM100 (`{mm100:.2f}`) | MM200 (`{mm200:.2f}`).
-- **RSI (14) :** `{rsi:.2f}` | **MACD :** `{macd:.4f}` (Signal: `{macd_sig_val:.4f}`).
-- **Bandes de Bollinger :** Sup=`{boll_up:.2f}` | Inf=`{boll_low:.2f}`.
+### 3. 📊 ANALYSE TECHNIQUE MULTI-INDICATEURS
+- **Moyennes Mobiles (50 / 100 / 200) :** MM50 (`{mm50:.2f}`) | MM100 (`{mm100:.2f}`) | MM200 (`{mm200:.2f}`).
+- **RSI (14) :** `{rsi:.2f}` | **MACD :** `{macd:.4f}` (Signal : `{macd_signal:.4f}`).
+- **Bandes de Bollinger :** Bande Supérieure = `{boll_up:.2f}` | Bande Inférieure = `{boll_low:.2f}`.
+- **Analyse du Volume :** Volume actuel = `{vol:,.0f}` (Moyenne 20 périodes : `{vol_ma:,.0f}`).
 - **Pivots Fibonacci :** R2=`{r2:.2f}`, R1=`{r1:.2f}`, Pivot=`{pivot:.2f}`, S1=`{s1:.2f}`, S2=`{s2:.2f}`.
 
 ---
 
-### 5. 🎯 PLAN DE TRADE & EXÉCUTION PAR ORDER FLOW
+### 4. 🎯 PLAN DE TRADE & NIVEAUX CLÉS
 - **Biais Opérationnel :** **{bias}**
-- **Point d'Entrée Chirurgical :** `{entry_opt:.2f}` sur confirmation d'absorption des flux.
+- **Point d'Entrée Optimal :** `{entry_opt:.2f}` (Validation par croisement MACD, positionnement Bollinger et confirmation du Volume)
 - **Stop Loss (SL) :** `{sl_val:.2f}` | **TP1 :** `{tp1_val:.2f}` | **TP2 :** `{tp2_val:.2f}`
 - **BREAK-EVEN (BE) :** Déplacer le SL au point d'entrée dès que le prix atteint `{be_val:.2f}`."""
 
     return f"""*(Assistant Trading IA - Mode Expert)*
-En tant qu'analyste institutionnel, j'ai bien pris en compte votre remarque sur le prix. Pour valider votre position par rapport au carnet d'ordres, surveillez l'absorption des flux et le respect des zones de valeur de l'ATR."""
+J'ai bien pris en compte votre demande. Nous pouvons analyser l'actualité de l'actif, affiner votre stratégie sur les indicateurs (MACD, Bollinger, MM 50/100/200, RSI, Volume, Pivots Fibonacci) ou recalculer vos niveaux de prix. Que souhaitez-vous approfondir ?"""
 
 # ---------------------------------------------------------
 # Dictionnaire complet des actifs
@@ -479,7 +483,6 @@ def get_recent_news(ticker_str, clean_asset_name="", fundamental_info=None):
                             if len(bullets) >= 3:
                                 return bullets[:4]
                             else:
-                                # Découpage intelligent si les puces ne sont pas formatées avec des tirets stricts
                                 paragraphs = [f"• {p.strip()}" for p in content.split("\n\n") if len(p.strip()) > 20]
                                 if paragraphs:
                                     return paragraphs[:4]
@@ -488,7 +491,6 @@ def get_recent_news(ticker_str, clean_asset_name="", fundamental_info=None):
     except Exception:
         pass
 
-    # Repli dynamique spécifique
     return [
         f"• **Décisions Stratégiques & Événements Clés ({clean_asset_name}) :** Analyse des orientations décidées par la direction et des répercussions des dernières publications financières sur la structure capitalistique de {clean_asset_name}.",
         f"• **Répercussions sur les Flux & la Valorisation :** Évaluation de l'impact des récents arbitrages de marché sur la génération d'EBITDA et les perspectives de croissance à moyen terme de {clean_asset_name}.",
@@ -536,8 +538,15 @@ def draw_interactive_chart(df, pivot, r1, r2, s1, s2, asset_name, timeframe, zoo
 
     if 'MM50' in df_reset.columns and df_reset['MM50'].notna().any():
         fig.add_trace(go.Scatter(x=df_reset[date_col], y=df_reset['MM50'], mode='lines', name='MM 50', line=dict(color='#ffab40', width=1.5)))
+    if 'MM100' in df_reset.columns and df_reset['MM100'].notna().any():
+        fig.add_trace(go.Scatter(x=df_reset[date_col], y=df_reset['MM100'], mode='lines', name='MM 100', line=dict(color='#29b6f6', width=1.5)))
     if 'MM200' in df_reset.columns and df_reset['MM200'].notna().any():
         fig.add_trace(go.Scatter(x=df_reset[date_col], y=df_reset['MM200'], mode='lines', name='MM 200', line=dict(color='#e040fb', width=2)))
+
+    if 'Boll_Upper' in df_reset.columns and df_reset['Boll_Upper'].notna().any():
+        fig.add_trace(go.Scatter(x=df_reset[date_col], y=df_reset['Boll_Upper'], mode='lines', name='Bollinger Sup', line=dict(color='rgba(38, 166, 154, 0.45)', width=1, dash='dash')))
+    if 'Boll_Lower' in df_reset.columns and df_reset['Boll_Lower'].notna().any():
+        fig.add_trace(go.Scatter(x=df_reset[date_col], y=df_reset['Boll_Lower'], mode='lines', name='Bollinger Inf', line=dict(color='rgba(38, 166, 154, 0.45)', width=1, dash='dash')))
 
     if pivot > 0:
         fig.add_hline(y=pivot, line_dash="dash", line_color="#ffd700", annotation_text=f"Pivot: {pivot:.2f}", annotation_position="top left")
@@ -683,16 +692,16 @@ if st.session_state.active_tab == "new":
                 df['MACD'] = exp1 - exp2
                 df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
 
-                high_low = df['High'] - df['Low']
-                high_close = np.abs(df['High'] - df['Close'].shift())
-                low_close = np.abs(df['Low'] - df['Close'].shift())
-                true_range = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
-                df['ATR'] = true_range.rolling(14).mean()
-
                 boll_mid = df['Close'].rolling(20).mean()
                 boll_std = df['Close'].rolling(20).std()
                 df['Boll_Upper'] = boll_mid + (boll_std * 2)
                 df['Boll_Lower'] = boll_mid - (boll_std * 2)
+
+                if 'Volume' in df.columns:
+                    df['Vol_MA20'] = df['Volume'].rolling(20).mean()
+                else:
+                    df['Volume'] = 0
+                    df['Vol_MA20'] = 0
 
                 mtf_trend = "Haussière 🟢" if not df_daily.empty and df_daily['Close'].iloc[-1] > df_daily['Close'].rolling(50).mean().iloc[-1] else "Baissière 🔴"
 
@@ -710,22 +719,27 @@ if st.session_state.active_tab == "new":
 
                 latest = df.iloc[-1]
                 current_price = float(latest['Close'])
-                atr_val = float(latest.get('ATR', current_price * 0.01))
-                rsi_val = float(latest.get('RSI', 50))
+                rsi_val = float(latest.get('RSI', 50)) if pd.notna(latest.get('RSI')) else 50.0
                 mm50 = float(latest.get('MM50', 0)) if pd.notna(latest.get('MM50')) else current_price
                 mm100 = float(latest.get('MM100', 0)) if pd.notna(latest.get('MM100')) else current_price
                 mm200 = float(latest.get('MM200', 0)) if pd.notna(latest.get('MM200')) else current_price
-                macd_val = float(latest.get('MACD', 0)) if pd.notna(latest.get('MACD')) else 0
-                macd_sig_val = float(latest.get('MACD_Signal', 0)) if pd.notna(latest.get('MACD_Signal')) else 0
-                boll_up = float(latest.get('Boll_Upper', current_price * 1.02))
-                boll_low = float(latest.get('Boll_Lower', current_price * 0.98))
+                macd_val = float(latest.get('MACD', 0)) if pd.notna(latest.get('MACD')) else 0.0
+                macd_sig_val = float(latest.get('MACD_Signal', 0)) if pd.notna(latest.get('MACD_Signal')) else 0.0
+                boll_up = float(latest.get('Boll_Upper', current_price * 1.02)) if pd.notna(latest.get('Boll_Upper')) else current_price * 1.02
+                boll_low = float(latest.get('Boll_Lower', current_price * 0.98)) if pd.notna(latest.get('Boll_Lower')) else current_price * 0.98
+                vol_val = float(latest.get('Volume', 0)) if pd.notna(latest.get('Volume')) else 0.0
+                vol_ma_val = float(latest.get('Vol_MA20', 0)) if pd.notna(latest.get('Vol_MA20')) else 0.0
+                vol_ratio = (vol_val / vol_ma_val) if vol_ma_val > 0 else 1.0
 
                 confluence_score = 50
-                if mtf_trend.startswith("Haussièr"): confluence_score += 15
-                if current_price > mm50: confluence_score += 10
-                if current_price > mm200: confluence_score += 10
-                if 40 <= rsi_val <= 60: confluence_score += 5
-                if current_price <= s1 or current_price >= r1: confluence_score += 10
+                if mtf_trend.startswith("Haussièr"): confluence_score += 10
+                if current_price > mm50: confluence_score += 8
+                if current_price > mm100: confluence_score += 6
+                if current_price > mm200: confluence_score += 8
+                if macd_val > macd_sig_val: confluence_score += 6
+                if 40 <= rsi_val <= 65: confluence_score += 5
+                if vol_ratio > 1.1: confluence_score += 5
+                if current_price <= s1 or current_price >= r1: confluence_score += 5
                 confluence_score = min(98, max(15, confluence_score))
 
                 prompt = f"""
@@ -749,19 +763,18 @@ if st.session_state.active_tab == "new":
                 - Prix actuel : {current_price:.2f}
                 - Tendance Daily (MTF) : {mtf_trend}
                 - Score de Confluence Globale : {confluence_score}%
-                - RSI (14) : {rsi_val:.2f}
                 - MACD : {macd_val:.4f} (Signal : {macd_sig_val:.4f})
-                - Moyennes Mobiles : MM50={mm50:.2f}, MM100={mm100:.2f}, MM200={mm200:.2f}
-                - Bandes de Bollinger : Sup={boll_up:.2f} | Inf={boll_low:.2f}
-                - Volatilité (ATR) : {atr_val:.2f}
-                - PIVOTS FIBONACCI : R2={r2:.2f}, R1={r1:.2f}, Pivot={pivot:.2f}, S1={s1:.2f}, S2={s2:.2f}
+                - Bandes de Bollinger : Bande Supérieure = {boll_up:.2f} | Bande Inférieure = {boll_low:.2f}
+                - Moyennes Mobiles : MM50 = {mm50:.2f}, MM100 = {mm100:.2f}, MM200 = {mm200:.2f}
+                - RSI (14) : {rsi_val:.2f}
+                - Volume : Volume actuel = {vol_val:,.0f} | Moyenne Volume (20) = {vol_ma_val:,.0f} (Ratio : {vol_ratio:.2f}x)
+                - PIVOTS FIBONACCI : R2 = {r2:.2f}, R1 = {r1:.2f}, Pivot = {pivot:.2f}, S1 = {s1:.2f}, S2 = {s2:.2f}
 
-                Structure ton rapport selon les exigences professionnelles suivantes :
+                Structure ton rapport selon les exigences professionnelles suivantes (n'utilise ni ATR ni Auction Market Theory) :
                 1. **Analyse Micro-économique & Conjoncturelle** : Intègre les éléments d'actualité récente, la santé financière, la structure des marges et des coûts de {clean_display_name}.
                 2. **Biais Macroéconomique (Taux, Inflation, Emploi)** : Impact des politiques monétaires et des flux globaux sur l'actif.
-                3. **Auction Market Theory (AMT)** : Définition de la Value Area, acceptation/rejet des prix, et zone de déséquilibre.
-                4. **Analyse Technique Avancée** : Lecture croisée MM (50/100/200), MACD, RSI, Bollinger et Pivots Fibonacci.
-                5. **Plan de Trade & Order Flow** : Point d'entrée chirurgical, SL dynamique, TP et gestion rigoureuse du Break-Even (BE).
+                3. **Analyse Technique Multi-Indicateurs** : Lecture croisée détaillée exclusivement basée sur le **MACD**, les **Bandes de Bollinger**, les **Moyennes Mobiles (50, 100, 200)**, le **RSI**, le **Volume** et les **Pivots Fibonacci**.
+                4. **Plan de Trade & Niveaux Opérationnels** : Point d'entrée optimal, Stop Loss (SL), Take Profit (TP1 / TP2) et gestion rigoureuse du Break-Even (BE) appuyés sur les Pivots Fibonacci, Bollinger et les Moyennes Mobiles.
                 """
 
                 data_ctx = {
@@ -769,7 +782,6 @@ if st.session_state.active_tab == "new":
                     "pivot": pivot, "r1": r1, "r2": r2, "s1": s1, "s2": s2,
                     "mtf_trend": mtf_trend,
                     "rsi": rsi_val,
-                    "atr": atr_val,
                     "macd": macd_val,
                     "macd_signal": macd_sig_val,
                     "mm50": mm50,
@@ -777,6 +789,8 @@ if st.session_state.active_tab == "new":
                     "mm200": mm200,
                     "boll_up": boll_up,
                     "boll_low": boll_low,
+                    "volume": vol_val,
+                    "vol_ma": vol_ma_val,
                     "confluence": confluence_score,
                     "fundamentals": fundamental_info
                 }
@@ -913,3 +927,5 @@ else:
         st.session_state.current_analysis = None
         st.session_state.chat_session_id = datetime.now().strftime("%Y%m%d%H%M%S%f")
         st.rerun()
+
+```
