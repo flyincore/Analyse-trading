@@ -1,10 +1,3 @@
-Le code complet ci-dessous intègre exactement les modifications demandées :
-
-* **Suppression complète** de l'analyse **ATR** et de l'**Auction Market Theory (AMT)** (dans les calculs, les prompts IA, le recalcul de prix dans le chat et le rapport de secours).
-* **Intégration stricte** de vos indicateurs : **MACD**, **Bandes de Bollinger**, **Moyennes Mobiles (50, 100, 200)**, **RSI**, **Volume** (avec moyenne mobile des volumes et ratio relatif) et **Pivots Fibonacci**.
-* **Conservation intégrale** du reste de l'application (Supabase, graphiques Plotly, dictionnaires d'actifs, synthèse d'actualité et chat permanent).
-
-```python
 import streamlit as st
 import yfinance as yf
 import pandas as pd
