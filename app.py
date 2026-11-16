@@ -920,5 +920,3 @@ else:
         st.session_state.current_analysis = None
         st.session_state.chat_session_id = datetime.now().strftime("%Y%m%d%H%M%S%f")
         st.rerun()
-
-```
