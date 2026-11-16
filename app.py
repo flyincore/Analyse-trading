@@ -8,6 +8,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import requests
 import streamlit as st
+import yfinance as yf
 from supabase import Client, create_client
 
 st.set_page_config(page_title="Analyse Trading Pro", layout="wide")
