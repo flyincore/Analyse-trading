@@ -76,6 +76,19 @@ def load_persistent_history():
             if response.data:
                 history = []
                 for r in response.data:
+                    raw_news = r.get("news", [])
+                    if isinstance(raw_news, str):
+                        try:
+                            parsed_news = json.loads(raw_news)
+                            if not isinstance(parsed_news, list):
+                                parsed_news = [str(parsed_news)]
+                        except Exception:
+                            parsed_news = [raw_news] if raw_news else []
+                    elif isinstance(raw_news, list):
+                        parsed_news = raw_news
+                    else:
+                        parsed_news = []
+
                     history.append({
                         "id": int(r["id"]),
                         "timestamp": str(r["timestamp"]),
@@ -86,7 +99,7 @@ def load_persistent_history():
                         "mtf_trend": str(r["mtf_trend"]),
                         "confluence": int(r["confluence"]),
                         "report": str(r["report"]),
-                        "news": json.loads(r["news"]) if r.get("news") else [],
+                        "news": parsed_news,
                         "zoom_36h": bool(r.get("zoom_36h", True)),
                         "executed": bool(r.get("executed", False)),
                         "result": str(r.get("result", "En cours / Indéterminé")),
@@ -185,7 +198,7 @@ KIE_ENDPOINT = "https://api.kie.ai/v1/chat/completions"
 
 def generate_ai_report(prompt_text, data_context=None):
     if KIE_API_KEY:
-        for model_name in ["gemini-3.8-flash", "gemini-3.7-flash"]:
+        for model_name in ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-2.5-flash"]:
             try:
                 headers = {
                     "Authorization": f"Bearer {KIE_API_KEY}",
@@ -194,9 +207,9 @@ def generate_ai_report(prompt_text, data_context=None):
                 payload = {
                     "model": model_name,
                     "messages": [{"role": "user", "content": prompt_text}],
-                    "temperature": 0.2
+                    "temperature": 0.3
                 }
-                res = requests.post(KIE_ENDPOINT, headers=headers, json=payload, timeout=20)
+                res = requests.post(KIE_ENDPOINT, headers=headers, json=payload, timeout=25)
                 if res.status_code == 200:
                     data = res.json()
                     if isinstance(data, dict):
@@ -214,7 +227,14 @@ def generate_ai_report(prompt_text, data_context=None):
     custom_price = float(price_match[-1]) if price_match else None
 
     if custom_price:
-        is_short = "SHORT" in prompt_text.upper() or "BAISSIÈR" in prompt_text.upper() or "BAISSIER" in prompt_text.upper()
+        upper_prompt = prompt_text.upper()
+        if "LONG 🟢" in upper_prompt or "HAUSSIÈR" in upper_prompt or "HAUSSIER" in upper_prompt:
+            is_short = False
+        elif "SHORT 🔴" in upper_prompt or "BAISSIÈR" in upper_prompt or "BAISSIER" in upper_prompt:
+            is_short = True
+        else:
+            is_short = "VENDRE" in upper_prompt or "SHORT" in upper_prompt
+
         step_est = custom_price * 0.01 
         
         if is_short:
@@ -236,7 +256,7 @@ def generate_ai_report(prompt_text, data_context=None):
 - **Nouveau Prix de Référence :** `{custom_price:.2f}`
 - **Biais Opérationnel :** **{bias_text}** (Aligné sur les moyennes mobiles, le MACD et les Pivots Fibonacci)
 - **Point d'Entrée Optimal :** `{custom_price:.2f}` (Sur validation du Volume et rebond Bollinger/Pivot)
-- **Stop Loss (SL) Institutionnel :** `{sl_val:.2f}` (Protégé au-delà du seuil technique clé)
+- **Stop Loss (SL) :** `{sl_val:.2f}` (Protégé au-delà du seuil technique clé)
 - **Take Profit 1 (TP1) :** `{tp1_val:.2f}` (Allègement de 50% de la position)
 - **Take Profit 2 (TP2) :** `{tp2_val:.2f}` (Objectif d'extension Fibonacci)
 - **GESTION DU BREAK-EVEN (BE) :** Déplacer le Stop Loss au point d'entrée dès que le prix atteint `{be_val:.2f}`."""
@@ -261,14 +281,61 @@ def generate_ai_report(prompt_text, data_context=None):
         vol_ma = data_context.get("vol_ma", 0)
         fund = data_context.get("fundamentals", {})
 
-        bias = "LONG 🟢" if "Haussièr" in trend else "SHORT 🔴"
-        sl_val = s1 if ("LONG" in bias and s1 > 0 and s1 < price) else (r1 if ("SHORT" in bias and r1 > price) else (price * 0.988 if "LONG" in bias else price * 1.012))
-        be_val = price + abs(price - sl_val) if "LONG" in bias else price - abs(price - sl_val)
-        tp1_val = r1 if ("LONG" in bias and r1 > price) else (s1 if ("SHORT" in bias and s1 > 0 and s1 < price) else (price * 1.015 if "LONG" in bias else price * 0.985))
-        tp2_val = r2 if ("LONG" in bias and r2 > price) else (s2 if ("SHORT" in bias and s2 > 0 and s2 < price) else (price * 1.03 if "LONG" in bias else price * 0.97))
+        # Calcul objectif du biais basé sur le consensus multi-indicateurs
+        bull_signals = 0
+        bear_signals = 0
+        if "Haussièr" in trend:
+            bull_signals += 2
+        elif "Baissièr" in trend:
+            bear_signals += 2
+
+        if price > mm50:
+            bull_signals += 1
+        elif price < mm50:
+            bear_signals += 1
+
+        if price > mm100:
+            bull_signals += 1
+        elif price < mm100:
+            bear_signals += 1
+
+        if price > mm200:
+            bull_signals += 2
+        elif price < mm200:
+            bear_signals += 2
+
+        if macd > macd_signal:
+            bull_signals += 1
+        elif macd < macd_signal:
+            bear_signals += 1
+
+        if rsi > 52:
+            bull_signals += 1
+        elif rsi < 48:
+            bear_signals += 1
+
+        if bull_signals > bear_signals:
+            bias = "LONG 🟢"
+            sl_val = s1 if (s1 > 0 and s1 < price) else price * 0.988
+            be_val = price + abs(price - sl_val)
+            tp1_val = r1 if (r1 > price) else price * 1.015
+            tp2_val = r2 if (r2 > price) else price * 1.03
+        elif bear_signals > bull_signals:
+            bias = "SHORT 🔴"
+            sl_val = r1 if (r1 > price) else price * 1.012
+            be_val = price - abs(price - sl_val)
+            tp1_val = s1 if (s1 > 0 and s1 < price) else price * 0.985
+            tp2_val = s2 if (s2 > 0 and s2 < price) else price * 0.97
+        else:
+            bias = "NEUTRE / ATTENTE DE CASSURE ⚪"
+            sl_val = s1 if (s1 > 0 and s1 < price) else price * 0.99
+            be_val = price
+            tp1_val = r1 if (r1 > price) else price * 1.01
+            tp2_val = r2 if (r2 > price) else price * 1.02
+
         entry_opt = price
 
-        return f"""*(Rapport d'Expertise Institutionnelle — Mode de Secours Algorithmique)*
+        return f"""*(Rapport d'Expertise Institutionnelle — Mode Algorithmique Multi-Indicateurs)*
 
 ### 1. 📈 ANALYSE FONDAMENTALE DE L'ACTIF
 - **Secteur / Industrie :** {fund.get('sector', 'N/A')} ({fund.get('industry', 'N/A')})
@@ -278,7 +345,7 @@ def generate_ai_report(prompt_text, data_context=None):
 
 ### 2. 🌍 BIAIS MACROÉCONOMIQUE (Taux, Inflation & Emploi)
 - **Politique Monétaire :** Les anticipations de taux des banques centrales guident l'allocation des flux de capitaux sur cet actif.
-- **Dynamique de Marché :** L'orientation des flux institutionnels s'appuie sur la structure des volumes et des moyennes mobiles de référence.
+- **Dynamique de Marché :** L'orientation des flux s'appuie sur la structure des volumes et le positionnement par rapport aux moyennes mobiles de référence ({bull_signals} signaux haussiers vs {bear_signals} signaux baissiers).
 
 ---
 
@@ -460,7 +527,7 @@ def get_recent_news(ticker_str, clean_asset_name="", fundamental_info=None):
                 "Authorization": f"Bearer {KIE_API_KEY}",
                 "Content-Type": "application/json"
             }
-            for model_name in ["gemini-3.8-flash", "gemini-3.7-flash"]:
+            for model_name in ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-2.5-flash"]:
                 try:
                     payload = {
                         "model": model_name,
@@ -659,7 +726,7 @@ if st.session_state.active_tab == "new":
         
         with st.spinner(f"Récupération fondamentale et analyse multi-sources pour {selected_asset_name}..."):
             df = load_market_data(ticker_symbol, tf_info["period"], tf_info["interval"])
-            df_daily = load_market_data(ticker_symbol, "6m", "1d")
+            df_daily = load_market_data(ticker_symbol, "6mo", "1d")
             
             fundamental_info = get_fundamental_data(ticker_symbol)
             clean_display_name = fundamental_info.get("name") if fundamental_info.get("name") != ticker_symbol else selected_asset_name
@@ -696,7 +763,16 @@ if st.session_state.active_tab == "new":
                     df['Volume'] = 0
                     df['Vol_MA20'] = 0
 
-                mtf_trend = "Haussière 🟢" if not df_daily.empty and df_daily['Close'].iloc[-1] > df_daily['Close'].rolling(50).mean().iloc[-1] else "Baissière 🔴"
+                if not df_daily.empty and len(df_daily) >= 50:
+                    daily_mm50 = float(df_daily['Close'].rolling(50).mean().iloc[-1])
+                    daily_close = float(df_daily['Close'].iloc[-1])
+                    mtf_trend = "Haussière 🟢" if daily_close > daily_mm50 else "Baissière 🔴"
+                elif not df_daily.empty and len(df_daily) >= 20:
+                    daily_mm20 = float(df_daily['Close'].rolling(20).mean().iloc[-1])
+                    daily_close = float(df_daily['Close'].iloc[-1])
+                    mtf_trend = "Haussière 🟢" if daily_close > daily_mm20 else "Baissière 🔴"
+                else:
+                    mtf_trend = "Indéterminée ⚪"
 
                 df_d = load_daily_pivots_data(ticker_symbol)
                 if len(df_d) >= 2:
@@ -763,7 +839,7 @@ if st.session_state.active_tab == "new":
                 - Volume : Volume actuel = {vol_val:,.0f} | Moyenne Volume (20) = {vol_ma_val:,.0f} (Ratio : {vol_ratio:.2f}x)
                 - PIVOTS FIBONACCI : R2 = {r2:.2f}, R1 = {r1:.2f}, Pivot = {pivot:.2f}, S1 = {s1:.2f}, S2 = {s2:.2f}
 
-                Structure ton rapport selon les exigences professionnelles suivantes (n'utilise ni ATR ni Auction Market Theory) :
+                Structure ton rapport selon les exigences professionnelles suivantes (n'utilise ni ATR ni Auction Market Theory, et base le sens du trade strictement sur l'alignement réel des indicateurs ci-dessus) :
                 1. **Analyse Micro-économique & Conjoncturelle** : Intègre les éléments d'actualité récente, la santé financière, la structure des marges et des coûts de {clean_display_name}.
                 2. **Biais Macroéconomique (Taux, Inflation, Emploi)** : Impact des politiques monétaires et des flux globaux sur l'actif.
                 3. **Analyse Technique Multi-Indicateurs** : Lecture croisée détaillée exclusivement basée sur le **MACD**, les **Bandes de Bollinger**, les **Moyennes Mobiles (50, 100, 200)**, le **RSI**, le **Volume** et les **Pivots Fibonacci**.
@@ -832,7 +908,8 @@ if st.session_state.active_tab == "new":
 
         st.markdown("---")
         st.markdown(f"### 📰 Synthèse d'Actualité Multi-Sources & Diagnostic Micro ({ca['asset']})")
-        news_html = "<div class='news-summary-box'>" + "<br><br>".join(ca['news']) + "</div>"
+        news_list_display = ca['news'] if isinstance(ca['news'], list) else [str(ca['news'])]
+        news_html = "<div class='news-summary-box'>" + "<br><br>".join(news_list_display) + "</div>"
         st.markdown(news_html, unsafe_allow_html=True)
 
         st.markdown("---")
@@ -889,7 +966,10 @@ else:
 
         st.markdown("---")
         st.markdown(f"### 📰 Synthèse d'Actualité Multi-Sources & Diagnostic Micro ({entry['asset']})")
-        news_html = "<div class='news-summary-box'>" + "<br><br>".join(entry.get('news', ['Actualités non disponibles.'])) + "</div>"
+        entry_news = entry.get('news', ['Actualités non disponibles.'])
+        if not isinstance(entry_news, list):
+            entry_news = [str(entry_news)]
+        news_html = "<div class='news-summary-box'>" + "<br><br>".join(entry_news) + "</div>"
         st.markdown(news_html, unsafe_allow_html=True)
 
         st.markdown("---")
